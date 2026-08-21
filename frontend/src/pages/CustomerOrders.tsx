@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
-import { CustomerOrder } from '../types';
+import { CustomerOrder, Location, InventoryItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
+import { Select } from '../components/Select';
 import { ShoppingCart, Plus, RefreshCw, AlertCircle, XCircle } from 'lucide-react';
 
 export const CustomerOrdersPage: React.FC = () => {
@@ -13,15 +14,17 @@ export const CustomerOrdersPage: React.FC = () => {
   const [error, setError] = useState('');
   const { user } = useAuth();
 
+  // Master Data State
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [inventories, setInventories] = useState<InventoryItem[]>([]);
+  const [masterLoading, setMasterLoading] = useState(false);
+
   // Create Modal State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [locations, setLocations] = useState<any[]>([]);
-  const [items, setItems] = useState<any[]>([]);
-
   const [customerName, setCustomerName] = useState('');
   const [locationId, setLocationId] = useState('');
   const [itemId, setItemId] = useState('');
-  const [quantity, setQuantity] = useState(10);
+  const [quantity, setQuantity] = useState<number | ''>(10);
 
   const [createLoading, setCreateLoading] = useState(false);
   const [modalError, setModalError] = useState('');
@@ -40,38 +43,98 @@ export const CustomerOrdersPage: React.FC = () => {
   };
 
   const fetchMasterData = async () => {
+    setMasterLoading(true);
     try {
       const invRes = await api.get('/inventory');
-      const invList: any[] = invRes.data.data || [];
+      const invList: InventoryItem[] = invRes.data.data || [];
+      setInventories(invList);
 
-      const locMap = new Map();
-      const itemMap = new Map();
+      const locMap = new Map<string, Location>();
       invList.forEach((inv) => {
-        if (inv.location) locMap.set(inv.location.id, inv.location);
-        if (inv.item) itemMap.set(inv.item.id, inv.item);
+        if (inv.location) {
+          locMap.set(inv.location.id, inv.location);
+        }
       });
-
       setLocations(Array.from(locMap.values()));
-      setItems(Array.from(itemMap.values()));
     } catch (err) {
       console.error('Failed to load master data for Customer Orders', err);
+    } finally {
+      setMasterLoading(false);
     }
   };
 
   useEffect(() => {
     fetchCustomerOrders();
+    fetchMasterData();
   }, []);
 
-  const handleOpenCreate = () => {
-    fetchMasterData();
+  const handleOpenCreate = async () => {
+    setModalError('');
+    setCustomerName('');
+    setLocationId('');
+    setItemId('');
+    setQuantity(10);
     setIsCreateOpen(true);
+    if (locations.length === 0) {
+      await fetchMasterData();
+    }
+  };
+
+  // Filter items based on selected Fulfillment Location
+  const availableInventoriesForLocation = inventories.filter(
+    (inv) => inv.locationId === locationId
+  );
+
+  const availableItemsForLocation = Array.from(
+    new Map(
+      availableInventoriesForLocation.map((inv) => [
+        inv.item.id,
+        {
+          id: inv.item.id,
+          name: inv.item.name,
+          sku: inv.item.sku,
+          availableQuantity: inv.physicalQuantity - inv.reservedQuantity,
+        },
+      ])
+    ).values()
+  );
+
+  const locationOptions = locations.map((loc) => ({
+    value: loc.id,
+    label: `${loc.name} (${loc.code})`,
+  }));
+
+  const itemOptions = locationId
+    ? availableItemsForLocation.map((item) => ({
+        value: item.id,
+        label: `${item.name} (${item.sku}) — Available: ${item.availableQuantity} units`,
+      }))
+    : [];
+
+  const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setLocationId(e.target.value);
+    setItemId(''); // Reset item when location changes
     setModalError('');
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName.trim() || !locationId || !itemId) {
-      setModalError('Please enter customer name, location, and item');
+
+    if (!customerName.trim()) {
+      setModalError('Customer Name is required');
+      return;
+    }
+    if (!locationId) {
+      setModalError('Please select a Fulfillment Location');
+      return;
+    }
+    if (!itemId) {
+      setModalError('Please select an Item Required');
+      return;
+    }
+    const parsedQty = typeof quantity === 'number' ? quantity : parseInt(String(quantity), 10);
+    if (isNaN(parsedQty) || parsedQty <= 0) {
+      setModalError('Quantity must be a positive integer');
       return;
     }
 
@@ -80,14 +143,15 @@ export const CustomerOrdersPage: React.FC = () => {
 
     try {
       await api.post('/customer-orders', {
-        customerName,
+        customerName: customerName.trim(),
         locationId,
         itemId,
-        quantity,
+        quantity: Math.floor(parsedQty),
       });
 
       setIsCreateOpen(false);
       fetchCustomerOrders();
+      fetchMasterData(); // Refresh stock levels
     } catch (err: any) {
       setModalError(err.response?.data?.error || 'Failed to reserve stock for customer order');
     } finally {
@@ -103,6 +167,7 @@ export const CustomerOrdersPage: React.FC = () => {
     try {
       await api.post(`/customer-orders/${orderId}/cancel`);
       fetchCustomerOrders();
+      fetchMasterData();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to cancel customer order');
     }
@@ -119,7 +184,10 @@ export const CustomerOrdersPage: React.FC = () => {
         actionButton={
           <div className="flex items-center space-x-3">
             <button
-              onClick={fetchCustomerOrders}
+              onClick={() => {
+                fetchCustomerOrders();
+                fetchMasterData();
+              }}
               className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 transition"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -216,96 +284,96 @@ export const CustomerOrdersPage: React.FC = () => {
         )}
       </div>
 
-      {/* Create Customer Order Modal */}
+      {/* Create Customer Order & Reserve Stock Modal */}
       {isCreateOpen && (
         <Modal
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
-          title="Create Customer Order & Reserve Stock"
+          title="Create Order & Reserve Stock"
           subtitle="Atomically reserve inventory quantity for a customer order."
         >
           {modalError && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3.5 rounded-xl font-medium">
               {modalError}
             </div>
           )}
 
-          <form onSubmit={handleCreateSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Customer Name</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Acme Industries, Global Corp..."
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
-              />
+          {masterLoading ? (
+            <div className="p-8 text-center space-y-2">
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-sky-500 border-t-transparent"></div>
+              <p className="text-xs text-slate-500">Loading locations & items...</p>
             </div>
+          ) : (
+            <form onSubmit={handleCreateSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Customer Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Acme Corp, Global Supplies..."
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Fulfillment Location</label>
-              <select
-                required
+              {/* Fulfillment Location Dropdown */}
+              <Select
+                label="Fulfillment Location"
                 value={locationId}
-                onChange={(e) => setLocationId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
-              >
-                <option value="">Select Location</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name} ({loc.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+                onChange={handleLocationChange}
+                placeholder="-- Select Location --"
+                options={locationOptions}
+              />
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Ordered Item</label>
-              <select
-                required
+              {/* Item Required Dropdown (Cascades from Fulfillment Location) */}
+              <Select
+                label="Item Required"
                 value={itemId}
                 onChange={(e) => setItemId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
-              >
-                <option value="">Select Item</option>
-                {items.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} ({item.sku})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Reservation Quantity</label>
-              <input
-                type="number"
-                min="1"
-                required
-                value={quantity}
-                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                disabled={!locationId}
+                placeholder={locationId ? '-- Select Item Required --' : '-- Select Location First --'}
+                options={itemOptions}
               />
-            </div>
 
-            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsCreateOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={createLoading}
-                className="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition active:scale-95 disabled:opacity-50"
-              >
-                {createLoading ? 'Reserving...' : 'Place Order & Reserve Stock'}
-              </button>
-            </div>
-          </form>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Quantity to Reserve
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  required
+                  value={quantity}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setQuantity(isNaN(val) ? '' : val);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateOpen(false)}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition active:scale-95 disabled:opacity-50"
+                >
+                  {createLoading ? 'Reserving Stock...' : 'Reserve Stock & Save Order'}
+                </button>
+              </div>
+            </form>
+          )}
         </Modal>
       )}
     </div>

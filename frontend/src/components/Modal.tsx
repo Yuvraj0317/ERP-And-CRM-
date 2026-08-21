@@ -23,9 +23,9 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, subtitle, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in-rise">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in-rise overflow-y-auto">
       <div
-        className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200/80 animate-modal-scale relative space-y-5"
+        className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200/80 animate-modal-scale relative space-y-5 my-8"
         role="dialog"
         aria-modal="true"
       >
