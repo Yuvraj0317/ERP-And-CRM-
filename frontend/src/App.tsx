@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { SideThemeToggle } from './components/SideThemeToggle';
 import { AppShell } from './components/AppShell';
 import { Login } from './pages/Login';
 import { DashboardPage } from './pages/Dashboard';
@@ -21,68 +23,73 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          {/* Floating Side Theme Switcher Button */}
+          <SideThemeToggle />
 
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedLayout>
-                <DashboardPage />
-              </ProtectedLayout>
-            }
-          />
+          <Routes>
+            <Route path="/login" element={<Login />} />
 
-          <Route
-            path="/inventory"
-            element={
-              <ProtectedLayout>
-                <InventoryPage />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedLayout>
+                  <DashboardPage />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/work-orders"
-            element={
-              <ProtectedLayout>
-                <WorkOrdersPage />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/inventory"
+              element={
+                <ProtectedLayout>
+                  <InventoryPage />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/transfers"
-            element={
-              <ProtectedLayout>
-                <InternalTransfersPage />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/work-orders"
+              element={
+                <ProtectedLayout>
+                  <WorkOrdersPage />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/orders"
-            element={
-              <ProtectedLayout>
-                <CustomerOrdersPage />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/transfers"
+              element={
+                <ProtectedLayout>
+                  <InternalTransfersPage />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route
-            path="/analytics"
-            element={
-              <ProtectedLayout>
-                <AnalyticsPage />
-              </ProtectedLayout>
-            }
-          />
+            <Route
+              path="/orders"
+              element={
+                <ProtectedLayout>
+                  <CustomerOrdersPage />
+                </ProtectedLayout>
+              }
+            />
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedLayout>
+                  <AnalyticsPage />
+                </ProtectedLayout>
+              }
+            />
+
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
