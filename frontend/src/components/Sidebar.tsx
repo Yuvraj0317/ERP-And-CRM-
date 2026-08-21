@@ -33,9 +33,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
   ];
 
   const secondaryNavItems = [
-    { label: 'Reports', icon: FileText, badge: 'Soon', isLink: false },
-    { path: '/analytics', label: 'Analytics', icon: PieChart, isLink: true },
-    { label: 'Settings', icon: Settings, badge: 'Soon', isLink: false },
+    { path: '/reports', label: 'Reports', icon: FileText },
+    { path: '/analytics', label: 'Analytics', icon: PieChart },
+    { path: '/settings', label: 'Settings', icon: Settings },
   ];
 
   const sidebarContent = (
@@ -62,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
           )}
         </div>
 
-        {/* Navigation Items */}
+        {/* Main Navigation Items */}
         <div className="space-y-1">
           {mainNavItems.map((item) => {
             const Icon = item.icon;
@@ -90,40 +90,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
             <div className="h-px bg-slate-100 dark:bg-slate-800"></div>
           </div>
 
+          {/* Secondary Fully-Functional Navigation Items */}
           {secondaryNavItems.map((item) => {
             const Icon = item.icon;
-            if (item.isLink && item.path) {
-              const isActive = location.pathname === item.path;
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={onClose}
-                  className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
-                    isActive
-                      ? 'bg-blue-50 dark:bg-blue-500/10 text-[#2563EB] dark:text-blue-400 border border-blue-200/60 dark:border-blue-500/30 shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 ${isActive ? 'text-[#2563EB] dark:text-blue-400' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            }
-
+            const isActive = location.pathname === item.path;
             return (
-              <div
-                key={item.label}
-                className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-75"
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={onClose}
+                className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+                  isActive
+                    ? 'bg-blue-50 dark:bg-blue-500/10 text-[#2563EB] dark:text-blue-400 border border-blue-200/60 dark:border-blue-500/30 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                }`}
               >
-                <div className="flex items-center space-x-3">
-                  <Icon className="h-4 w-4 text-slate-400 dark:text-slate-600" />
-                  <span>{item.label}</span>
-                </div>
-                <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded font-mono font-bold">
-                  {item.badge}
-                </span>
-              </div>
+                <Icon className={`h-4 w-4 ${isActive ? 'text-[#2563EB] dark:text-blue-400' : 'text-slate-400'}`} />
+                <span>{item.label}</span>
+              </Link>
             );
           })}
         </div>
