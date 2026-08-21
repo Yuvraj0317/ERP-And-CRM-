@@ -8,12 +8,26 @@ export const createCustomerOrder = async (data: {
   itemId: string;
   quantity: number;
   salesUserId: string;
+  idempotencyKey?: string;
 }) => {
   if (data.quantity <= 0) {
     throw new AppError('Order quantity must be greater than zero', 400);
   }
 
   return prisma.$transaction(async (tx) => {
+    // Idempotency check
+    if (data.idempotencyKey) {
+      const existingTx = await tx.inventoryTransaction.findUnique({
+        where: { idempotencyKey: data.idempotencyKey },
+      });
+      if (existingTx && existingTx.referenceId) {
+        return tx.customerOrder.findUnique({
+          where: { id: existingTx.referenceId },
+          include: { location: true, item: true, salesUser: true },
+        });
+      }
+    }
+
     const inventory = await tx.inventory.findFirst({
       where: {
         locationId: data.locationId,
@@ -25,29 +39,20 @@ export const createCustomerOrder = async (data: {
       throw new AppError('No inventory record found for the requested item at this location', 404);
     }
 
-    const available = inventory.physicalQuantity - inventory.reservedQuantity;
+    // Atomic conditional update at database level (WHERE availableQuantity >= quantity)
+    const updatedCount = await tx.$executeRaw`
+      UPDATE "Inventory"
+      SET 
+        "reservedQuantity" = "reservedQuantity" + ${data.quantity},
+        "availableQuantity" = "availableQuantity" - ${data.quantity},
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${inventory.id}
+        AND "availableQuantity" >= ${data.quantity}
+    `;
 
-    if (available < data.quantity) {
-      throw new AppError(
-        `Insufficient available inventory to reserve. Available: ${available}, Requested: ${data.quantity}`,
-        400
-      );
+    if (updatedCount === 0) {
+      throw new AppError('Insufficient available inventory for stock reservation', 400);
     }
-
-    const newReserved = inventory.reservedQuantity + data.quantity;
-    const newAvailable = inventory.physicalQuantity - newReserved;
-
-    if (newAvailable < 0) {
-      throw new AppError('Stock reservation rejected due to concurrent balance conflict', 400);
-    }
-
-    await tx.inventory.update({
-      where: { id: inventory.id },
-      data: {
-        reservedQuantity: newReserved,
-        availableQuantity: newAvailable,
-      },
-    });
 
     const count = await tx.customerOrder.count();
     const orderNumber = `CO-2026-${String(count + 1).padStart(3, '0')}`;
@@ -69,17 +74,16 @@ export const createCustomerOrder = async (data: {
       },
     });
 
-    await tx.inventoryAuditLog.create({
+    await tx.inventoryTransaction.create({
       data: {
         inventoryId: inventory.id,
-        changeType: 'STOCK_RESERVATION',
+        type: 'RESERVATION',
         quantity: data.quantity,
-        previousPhysical: inventory.physicalQuantity,
-        newPhysical: inventory.physicalQuantity,
-        previousReserved: inventory.reservedQuantity,
-        newReserved,
+        referenceType: 'CUSTOMER_ORDER',
+        referenceId: order.id,
+        idempotencyKey: data.idempotencyKey || null,
         reason: `Reserved stock for Customer Order ${orderNumber}`,
-        userId: data.salesUserId,
+        createdById: data.salesUserId,
       },
     });
 
@@ -109,28 +113,24 @@ export const cancelCustomerOrder = async (orderId: string, userId: string) => {
     });
 
     if (inventory) {
-      const newReserved = Math.max(0, inventory.reservedQuantity - order.quantity);
-      const newAvailable = inventory.physicalQuantity - newReserved;
+      await tx.$executeRaw`
+        UPDATE "Inventory"
+        SET 
+          "reservedQuantity" = GREATEST(0, "reservedQuantity" - ${order.quantity}),
+          "availableQuantity" = "physicalQuantity" - GREATEST(0, "reservedQuantity" - ${order.quantity}),
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = ${inventory.id}
+      `;
 
-      await tx.inventory.update({
-        where: { id: inventory.id },
-        data: {
-          reservedQuantity: newReserved,
-          availableQuantity: newAvailable,
-        },
-      });
-
-      await tx.inventoryAuditLog.create({
+      await tx.inventoryTransaction.create({
         data: {
           inventoryId: inventory.id,
-          changeType: 'RELEASE_RESERVATION',
+          type: 'RELEASE',
           quantity: -order.quantity,
-          previousPhysical: inventory.physicalQuantity,
-          newPhysical: inventory.physicalQuantity,
-          previousReserved: inventory.reservedQuantity,
-          newReserved,
+          referenceType: 'CUSTOMER_ORDER',
+          referenceId: order.id,
           reason: `Released stock from cancelled Order ${order.orderNumber}`,
-          userId,
+          createdById: userId,
         },
       });
     }

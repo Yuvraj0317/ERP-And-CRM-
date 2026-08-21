@@ -99,17 +99,15 @@ export const dispatchTransfer = async (transferId: string, dispatchedById: strin
       },
     });
 
-    await tx.inventoryAuditLog.create({
+    await tx.inventoryTransaction.create({
       data: {
         inventoryId: sourceInv.id,
-        changeType: 'TRANSFER_DISPATCH',
+        type: 'TRANSFER_DISPATCH',
         quantity: -transfer.quantity,
-        previousPhysical: sourceInv.physicalQuantity,
-        newPhysical,
-        previousReserved: sourceInv.reservedQuantity,
-        newReserved: sourceInv.reservedQuantity,
+        referenceType: 'TRANSFER',
+        referenceId: transfer.id,
         reason: `Dispatched Transfer ${transfer.transferNumber}`,
-        userId: dispatchedById,
+        createdById: dispatchedById,
       },
     });
 
@@ -153,10 +151,20 @@ export const receiveTransfer = async (transferId: string, receivedById: string) 
       );
     }
 
+    // Get source batch for deterministic tracking
+    const sourceBatch = await tx.batch.findFirst({
+      where: { itemId: transfer.itemId },
+    });
+
+    if (!sourceBatch) {
+      throw new AppError('No batch record found for item transfer', 400);
+    }
+
     let destInv = await tx.inventory.findFirst({
       where: {
         locationId: transfer.destinationLocationId,
         itemId: transfer.itemId,
+        batchId: sourceBatch.id,
       },
     });
 
@@ -168,6 +176,7 @@ export const receiveTransfer = async (transferId: string, receivedById: string) 
         data: {
           itemId: transfer.itemId,
           locationId: transfer.destinationLocationId,
+          batchId: sourceBatch.id,
           physicalQuantity: transfer.quantity,
           reservedQuantity: 0,
           availableQuantity: transfer.quantity,
@@ -188,17 +197,15 @@ export const receiveTransfer = async (transferId: string, receivedById: string) 
       });
     }
 
-    await tx.inventoryAuditLog.create({
+    await tx.inventoryTransaction.create({
       data: {
         inventoryId: destInv.id,
-        changeType: 'TRANSFER_RECEIVE',
+        type: 'TRANSFER_RECEIVE',
         quantity: transfer.quantity,
-        previousPhysical: destInv.physicalQuantity,
-        newPhysical,
-        previousReserved: destInv.reservedQuantity,
-        newReserved: destInv.reservedQuantity,
+        referenceType: 'TRANSFER',
+        referenceId: transfer.id,
         reason: `Received Transfer ${transfer.transferNumber}`,
-        userId: receivedById,
+        createdById: receivedById,
       },
     });
 

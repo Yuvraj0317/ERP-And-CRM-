@@ -3,8 +3,33 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OPERATIONS
+  SALES
+}
+
+enum WorkOrderStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TransferStatus {
+  REQUESTED
+  DISPATCHED
+  RECEIVED
+}
+
+enum CustomerOrderStatus {
+  PENDING
+  RESERVED
+  CANCELLED
+  COMPLETED
 }
 
 model User {
@@ -12,17 +37,17 @@ model User {
   email     String   @unique
   password  String
   name      String
-  role      String   @default("OPERATIONS") // ADMIN, OPERATIONS, SALES
+  role      Role     @default(OPERATIONS)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignedWorkOrders  WorkOrder[]     @relation("AssignedUser")
-  createdWorkOrders   WorkOrder[]     @relation("CreatedByUser")
-  requestedTransfers  StockTransfer[] @relation("RequestedBy")
-  dispatchedTransfers StockTransfer[] @relation("DispatchedBy")
-  receivedTransfers   StockTransfer[] @relation("ReceivedBy")
-  customerOrders      CustomerOrder[]
-  auditLogs           InventoryAuditLog[]
+  assignedWorkOrders   WorkOrder[]            @relation("AssignedUser")
+  createdWorkOrders    WorkOrder[]            @relation("CreatedByUser")
+  requestedTransfers   StockTransfer[]        @relation("RequestedBy")
+  dispatchedTransfers  StockTransfer[]        @relation("DispatchedBy")
+  receivedTransfers    StockTransfer[]        @relation("ReceivedBy")
+  customerOrders       CustomerOrder[]
+  transactions         InventoryTransaction[]
 }
 
 model Location {
@@ -34,8 +59,8 @@ model Location {
 
   inventories          Inventory[]
   workOrders           WorkOrder[]
-  sourceTransfers      StockTransfer[] @relation("SourceLocation")
-  destinationTransfers StockTransfer[] @relation("DestinationLocation")
+  sourceTransfers      StockTransfer[]        @relation("SourceLocation")
+  destinationTransfers StockTransfer[]        @relation("DestinationLocation")
   customerOrders       CustomerOrder[]
 }
 
@@ -48,12 +73,12 @@ model Category {
 }
 
 model Item {
-  id          String   @id @default(uuid())
-  sku         String   @unique
-  name        String
-  unit        String   @default("pcs")
-  categoryId  String
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  sku        String   @unique
+  name       String
+  unit       String   @default("pcs")
+  categoryId String
+  createdAt  DateTime @default(now())
 
   category       Category        @relation(fields: [categoryId], references: [id])
   batches        Batch[]
@@ -78,32 +103,48 @@ model Inventory {
   id                String   @id @default(uuid())
   itemId            String
   locationId        String
-  batchId           String?
+  batchId           String   // Required for deterministic inventory tracking
   physicalQuantity  Int      @default(0)
   reservedQuantity  Int      @default(0)
   availableQuantity Int      @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  item      Item                @relation(fields: [itemId], references: [id])
-  location  Location            @relation(fields: [locationId], references: [id])
-  batch     Batch?              @relation(fields: [batchId], references: [id])
-  auditLogs InventoryAuditLog[]
+  item         Item                   @relation(fields: [itemId], references: [id])
+  location     Location               @relation(fields: [locationId], references: [id])
+  batch        Batch                  @relation(fields: [batchId], references: [id])
+  transactions InventoryTransaction[]
 
   @@unique([itemId, locationId, batchId])
 }
 
+model InventoryTransaction {
+  id             String   @id @default(uuid())
+  inventoryId    String
+  type           String   // INITIAL_STOCK, ADJUSTMENT, TRANSFER_DISPATCH, TRANSFER_RECEIVE, RESERVATION, RELEASE
+  quantity       Int
+  referenceType  String?  // WORK_ORDER, TRANSFER, CUSTOMER_ORDER
+  referenceId    String?
+  idempotencyKey String?  @unique
+  reason         String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+  createdBy User?     @relation(fields: [createdById], references: [id])
+}
+
 model WorkOrder {
-  id               String   @id @default(uuid())
-  workOrderNumber  String   @unique
+  id               String          @id @default(uuid())
+  workOrderNumber  String          @unique
   locationId       String
   itemId           String
   requiredQuantity Int
   assignedUserId   String
   createdById      String
-  status           String   @default("ASSIGNED") // ASSIGNED, IN_PROGRESS, COMPLETED
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  status           WorkOrderStatus @default(ASSIGNED)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   location     Location @relation(fields: [locationId], references: [id])
   item         Item     @relation(fields: [itemId], references: [id])
@@ -112,18 +153,18 @@ model WorkOrder {
 }
 
 model StockTransfer {
-  id                    String   @id @default(uuid())
-  transferNumber        String   @unique
+  id                    String         @id @default(uuid())
+  transferNumber        String         @unique
   sourceLocationId      String
   destinationLocationId String
   itemId                String
   quantity              Int
-  status                String   @default("REQUESTED") // REQUESTED, DISPATCHED, RECEIVED
+  status                TransferStatus @default(REQUESTED)
   requestedById         String
   dispatchedById        String?
   receivedById          String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
   sourceLocation      Location @relation("SourceLocation", fields: [sourceLocationId], references: [id])
   destinationLocation Location @relation("DestinationLocation", fields: [destinationLocationId], references: [id])
@@ -134,35 +175,18 @@ model StockTransfer {
 }
 
 model CustomerOrder {
-  id           String   @id @default(uuid())
-  orderNumber  String   @unique
+  id           String              @id @default(uuid())
+  orderNumber  String              @unique
   customerName String
   locationId   String
   itemId       String
   quantity     Int
-  status       String   @default("PENDING") // PENDING, RESERVED, CANCELLED, COMPLETED
+  status       CustomerOrderStatus @default(PENDING)
   salesUserId  String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   location  Location @relation(fields: [locationId], references: [id])
   item      Item     @relation(fields: [itemId], references: [id])
   salesUser User     @relation(fields: [salesUserId], references: [id])
-}
-
-model InventoryAuditLog {
-  id               String   @id @default(uuid())
-  inventoryId      String
-  changeType       String
-  quantity         Int
-  previousPhysical Int
-  newPhysical      Int
-  previousReserved Int
-  newReserved      Int
-  reason           String?
-  userId           String?
-  createdAt        DateTime @default(now())
-
-  inventory Inventory @relation(fields: [inventoryId], references: [id])
-  user      User?     @relation(fields: [userId], references: [id])
 }

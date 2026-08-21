@@ -56,17 +56,28 @@ export const getInventoryById = async (id: string) => {
 export const updateStockLevel = async (
   itemId: string,
   locationId: string,
-  batchId: string | null,
+  batchId: string,
   quantityChange: number,
   reason: string,
+  idempotencyKey?: string,
   userId?: string
 ) => {
   return prisma.$transaction(async (tx) => {
+    // Idempotency check
+    if (idempotencyKey) {
+      const existingTx = await tx.inventoryTransaction.findUnique({
+        where: { idempotencyKey },
+      });
+      if (existingTx) {
+        return tx.inventory.findUnique({ where: { id: existingTx.inventoryId } });
+      }
+    }
+
     let inventory = await tx.inventory.findFirst({
       where: {
         itemId,
         locationId,
-        batchId: batchId || null,
+        batchId,
       },
     });
 
@@ -79,24 +90,21 @@ export const updateStockLevel = async (
         data: {
           itemId,
           locationId,
-          batchId: batchId || null,
+          batchId,
           physicalQuantity: quantityChange,
           reservedQuantity: 0,
           availableQuantity: quantityChange,
         },
       });
 
-      await tx.inventoryAuditLog.create({
+      await tx.inventoryTransaction.create({
         data: {
           inventoryId: inventory.id,
-          changeType: 'INITIAL_STOCK',
+          type: 'INITIAL_STOCK',
           quantity: quantityChange,
-          previousPhysical: 0,
-          newPhysical: quantityChange,
-          previousReserved: 0,
-          newReserved: 0,
+          idempotencyKey: idempotencyKey || null,
           reason,
-          userId,
+          createdById: userId || null,
         },
       });
 
@@ -122,17 +130,14 @@ export const updateStockLevel = async (
       },
     });
 
-    await tx.inventoryAuditLog.create({
+    await tx.inventoryTransaction.create({
       data: {
         inventoryId: inventory.id,
-        changeType: quantityChange >= 0 ? 'STOCK_ADD' : 'STOCK_REDUCE',
+        type: quantityChange >= 0 ? 'STOCK_ADD' : 'STOCK_REDUCE',
         quantity: quantityChange,
-        previousPhysical: inventory.physicalQuantity,
-        newPhysical,
-        previousReserved: inventory.reservedQuantity,
-        newReserved: inventory.reservedQuantity,
+        idempotencyKey: idempotencyKey || null,
         reason,
-        userId,
+        createdById: userId || null,
       },
     });
 
