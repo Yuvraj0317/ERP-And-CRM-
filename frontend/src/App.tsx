@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { SideThemeToggle } from './components/SideThemeToggle';
 import { AppShell } from './components/AppShell';
 import { Login } from './pages/Login';
 import { DashboardPage } from './pages/Dashboard';
@@ -26,9 +25,6 @@ export const App: React.FC = () => {
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
-          {/* Floating Side Theme Switcher Button */}
-          <SideThemeToggle />
-
           <Routes>
             <Route path="/login" element={<Login />} />
 
