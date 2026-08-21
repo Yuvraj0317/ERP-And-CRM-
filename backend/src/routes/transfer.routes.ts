@@ -23,11 +23,11 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', authorize([Role.ADMIN, Role.OPERATIONS]), async (req, res, next) => {
   try {
-    const { sourceLocationId, destinationLocationId, itemId, quantity } = req.body;
-    if (!sourceLocationId || !destinationLocationId || !itemId || !quantity) {
+    const { sourceLocationId, destinationLocationId, itemId, batchId, quantity } = req.body;
+    if (!sourceLocationId || !destinationLocationId || !itemId || !batchId || !quantity) {
       return res.status(400).json({
         success: false,
-        error: 'sourceLocationId, destinationLocationId, itemId, and quantity are required',
+        error: 'sourceLocationId, destinationLocationId, itemId, batchId, and quantity are required',
       });
     }
 
@@ -35,6 +35,7 @@ router.post('/', authorize([Role.ADMIN, Role.OPERATIONS]), async (req, res, next
       sourceLocationId,
       destinationLocationId,
       itemId,
+      batchId,
       quantity: Number(quantity),
       requestedById: req.user!.id,
     });

@@ -1,11 +1,13 @@
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { TransferStatus } from '../types';
+import crypto from 'crypto';
 
 export const createTransferRequest = async (data: {
   sourceLocationId: string;
   destinationLocationId: string;
   itemId: string;
+  batchId: string;
   quantity: number;
   requestedById: string;
 }) => {
@@ -21,6 +23,7 @@ export const createTransferRequest = async (data: {
     where: {
       locationId: data.sourceLocationId,
       itemId: data.itemId,
+      batchId: data.batchId,
     },
   });
 
@@ -44,6 +47,7 @@ export const createTransferRequest = async (data: {
       sourceLocationId: data.sourceLocationId,
       destinationLocationId: data.destinationLocationId,
       itemId: data.itemId,
+      batchId: data.batchId,
       quantity: data.quantity,
       status: TransferStatus.REQUESTED,
       requestedById: data.requestedById,
@@ -52,6 +56,7 @@ export const createTransferRequest = async (data: {
       sourceLocation: true,
       destinationLocation: true,
       item: true,
+      batch: true,
       requestedBy: { select: { id: true, name: true, email: true } },
     },
   });
@@ -60,6 +65,8 @@ export const createTransferRequest = async (data: {
 };
 
 export const dispatchTransfer = async (transferId: string, dispatchedById: string) => {
+  const idempotencyKey = `DISPATCH-${transferId}-${Date.now()}`;
+
   return prisma.$transaction(async (tx) => {
     const transfer = await tx.stockTransfer.findUnique({
       where: { id: transferId },
@@ -77,6 +84,7 @@ export const dispatchTransfer = async (transferId: string, dispatchedById: strin
       where: {
         locationId: transfer.sourceLocationId,
         itemId: transfer.itemId,
+        batchId: transfer.batchId,
       },
     });
 
@@ -106,6 +114,7 @@ export const dispatchTransfer = async (transferId: string, dispatchedById: strin
         quantity: -transfer.quantity,
         referenceType: 'TRANSFER',
         referenceId: transfer.id,
+        idempotencyKey,
         reason: `Dispatched Transfer ${transfer.transferNumber}`,
         createdById: dispatchedById,
       },
@@ -121,6 +130,7 @@ export const dispatchTransfer = async (transferId: string, dispatchedById: strin
         sourceLocation: true,
         destinationLocation: true,
         item: true,
+        batch: true,
         requestedBy: { select: { id: true, name: true } },
         dispatchedBy: { select: { id: true, name: true } },
       },
@@ -131,7 +141,17 @@ export const dispatchTransfer = async (transferId: string, dispatchedById: strin
 };
 
 export const receiveTransfer = async (transferId: string, receivedById: string) => {
+  const idempotencyKey = `RECEIVE-${transferId}`;
+
   return prisma.$transaction(async (tx) => {
+    // Idempotency check: prevent duplicate receipt
+    const existingTx = await tx.inventoryTransaction.findUnique({
+      where: { idempotencyKey },
+    });
+    if (existingTx) {
+      throw new AppError('Transfer has already been received. Duplicate receipt is forbidden.', 400);
+    }
+
     const transfer = await tx.stockTransfer.findUnique({
       where: { id: transferId },
     });
@@ -151,20 +171,11 @@ export const receiveTransfer = async (transferId: string, receivedById: string) 
       );
     }
 
-    // Get source batch for deterministic tracking
-    const sourceBatch = await tx.batch.findFirst({
-      where: { itemId: transfer.itemId },
-    });
-
-    if (!sourceBatch) {
-      throw new AppError('No batch record found for item transfer', 400);
-    }
-
     let destInv = await tx.inventory.findFirst({
       where: {
         locationId: transfer.destinationLocationId,
         itemId: transfer.itemId,
-        batchId: sourceBatch.id,
+        batchId: transfer.batchId,
       },
     });
 
@@ -176,7 +187,7 @@ export const receiveTransfer = async (transferId: string, receivedById: string) 
         data: {
           itemId: transfer.itemId,
           locationId: transfer.destinationLocationId,
-          batchId: sourceBatch.id,
+          batchId: transfer.batchId,
           physicalQuantity: transfer.quantity,
           reservedQuantity: 0,
           availableQuantity: transfer.quantity,
@@ -204,6 +215,7 @@ export const receiveTransfer = async (transferId: string, receivedById: string) 
         quantity: transfer.quantity,
         referenceType: 'TRANSFER',
         referenceId: transfer.id,
+        idempotencyKey,
         reason: `Received Transfer ${transfer.transferNumber}`,
         createdById: receivedById,
       },
@@ -219,6 +231,7 @@ export const receiveTransfer = async (transferId: string, receivedById: string) 
         sourceLocation: true,
         destinationLocation: true,
         item: true,
+        batch: true,
         requestedBy: { select: { id: true, name: true } },
         dispatchedBy: { select: { id: true, name: true } },
         receivedBy: { select: { id: true, name: true } },
@@ -235,6 +248,7 @@ export const getTransfers = async () => {
       sourceLocation: true,
       destinationLocation: true,
       item: true,
+      batch: true,
       requestedBy: { select: { id: true, name: true, email: true } },
       dispatchedBy: { select: { id: true, name: true, email: true } },
       receivedBy: { select: { id: true, name: true, email: true } },

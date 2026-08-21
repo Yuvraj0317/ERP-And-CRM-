@@ -41,13 +41,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignedWorkOrders   WorkOrder[]            @relation("AssignedUser")
-  createdWorkOrders    WorkOrder[]            @relation("CreatedByUser")
-  requestedTransfers   StockTransfer[]        @relation("RequestedBy")
-  dispatchedTransfers  StockTransfer[]        @relation("DispatchedBy")
-  receivedTransfers    StockTransfer[]        @relation("ReceivedBy")
-  customerOrders       CustomerOrder[]
-  transactions         InventoryTransaction[]
+  assignedWorkOrders  WorkOrder[]            @relation("AssignedUser")
+  createdWorkOrders   WorkOrder[]            @relation("CreatedByUser")
+  requestedTransfers  StockTransfer[]        @relation("RequestedBy")
+  dispatchedTransfers StockTransfer[]        @relation("DispatchedBy")
+  receivedTransfers   StockTransfer[]        @relation("ReceivedBy")
+  customerOrders      CustomerOrder[]
+  transactions        InventoryTransaction[]
 }
 
 model Location {
@@ -59,8 +59,8 @@ model Location {
 
   inventories          Inventory[]
   workOrders           WorkOrder[]
-  sourceTransfers      StockTransfer[]        @relation("SourceLocation")
-  destinationTransfers StockTransfer[]        @relation("DestinationLocation")
+  sourceTransfers      StockTransfer[] @relation("SourceLocation")
+  destinationTransfers StockTransfer[] @relation("DestinationLocation")
   customerOrders       CustomerOrder[]
 }
 
@@ -95,15 +95,18 @@ model Batch {
   expiryDate  DateTime?
   createdAt   DateTime  @default(now())
 
-  item        Item        @relation(fields: [itemId], references: [id])
+  item        Item            @relation(fields: [itemId], references: [id])
   inventories Inventory[]
+  transfers   StockTransfer[]
+
+  @@unique([id, itemId])
 }
 
 model Inventory {
   id                String   @id @default(uuid())
   itemId            String
   locationId        String
-  batchId           String   // Required for deterministic inventory tracking
+  batchId           String
   physicalQuantity  Int      @default(0)
   reservedQuantity  Int      @default(0)
   availableQuantity Int      @default(0)
@@ -112,7 +115,7 @@ model Inventory {
 
   item         Item                   @relation(fields: [itemId], references: [id])
   location     Location               @relation(fields: [locationId], references: [id])
-  batch        Batch                  @relation(fields: [batchId], references: [id])
+  batch        Batch                  @relation(fields: [batchId, itemId], references: [id, itemId])
   transactions InventoryTransaction[]
 
   @@unique([itemId, locationId, batchId])
@@ -121,11 +124,11 @@ model Inventory {
 model InventoryTransaction {
   id             String   @id @default(uuid())
   inventoryId    String
-  type           String   // INITIAL_STOCK, ADJUSTMENT, TRANSFER_DISPATCH, TRANSFER_RECEIVE, RESERVATION, RELEASE
+  type           String
   quantity       Int
-  referenceType  String?  // WORK_ORDER, TRANSFER, CUSTOMER_ORDER
+  referenceType  String?
   referenceId    String?
-  idempotencyKey String?  @unique
+  idempotencyKey String   @unique
   reason         String?
   createdById    String?
   createdAt      DateTime @default(now())
@@ -158,6 +161,7 @@ model StockTransfer {
   sourceLocationId      String
   destinationLocationId String
   itemId                String
+  batchId               String
   quantity              Int
   status                TransferStatus @default(REQUESTED)
   requestedById         String
@@ -169,6 +173,7 @@ model StockTransfer {
   sourceLocation      Location @relation("SourceLocation", fields: [sourceLocationId], references: [id])
   destinationLocation Location @relation("DestinationLocation", fields: [destinationLocationId], references: [id])
   item                Item     @relation(fields: [itemId], references: [id])
+  batch               Batch    @relation(fields: [batchId, itemId], references: [id, itemId])
   requestedBy         User     @relation("RequestedBy", fields: [requestedById], references: [id])
   dispatchedBy        User?    @relation("DispatchedBy", fields: [dispatchedById], references: [id])
   receivedBy          User?    @relation("ReceivedBy", fields: [receivedById], references: [id])

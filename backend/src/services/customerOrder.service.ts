@@ -1,6 +1,7 @@
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { CustomerOrderStatus } from '../types';
+import crypto from 'crypto';
 
 export const createCustomerOrder = async (data: {
   customerName: string;
@@ -14,18 +15,17 @@ export const createCustomerOrder = async (data: {
     throw new AppError('Order quantity must be greater than zero', 400);
   }
 
+  const idempotencyKey = data.idempotencyKey || `RESERVE-${crypto.randomUUID()}`;
+
   return prisma.$transaction(async (tx) => {
-    // Idempotency check
-    if (data.idempotencyKey) {
-      const existingTx = await tx.inventoryTransaction.findUnique({
-        where: { idempotencyKey: data.idempotencyKey },
+    const existingTx = await tx.inventoryTransaction.findUnique({
+      where: { idempotencyKey },
+    });
+    if (existingTx && existingTx.referenceId) {
+      return tx.customerOrder.findUnique({
+        where: { id: existingTx.referenceId },
+        include: { location: true, item: true, salesUser: true },
       });
-      if (existingTx && existingTx.referenceId) {
-        return tx.customerOrder.findUnique({
-          where: { id: existingTx.referenceId },
-          include: { location: true, item: true, salesUser: true },
-        });
-      }
     }
 
     const inventory = await tx.inventory.findFirst({
@@ -39,7 +39,6 @@ export const createCustomerOrder = async (data: {
       throw new AppError('No inventory record found for the requested item at this location', 404);
     }
 
-    // Atomic conditional update at database level (WHERE availableQuantity >= quantity)
     const updatedCount = await tx.$executeRaw`
       UPDATE "Inventory"
       SET 
@@ -81,7 +80,7 @@ export const createCustomerOrder = async (data: {
         quantity: data.quantity,
         referenceType: 'CUSTOMER_ORDER',
         referenceId: order.id,
-        idempotencyKey: data.idempotencyKey || null,
+        idempotencyKey,
         reason: `Reserved stock for Customer Order ${orderNumber}`,
         createdById: data.salesUserId,
       },
@@ -92,6 +91,8 @@ export const createCustomerOrder = async (data: {
 };
 
 export const cancelCustomerOrder = async (orderId: string, userId: string) => {
+  const cancelIdempotencyKey = `CANCEL-${orderId}-${Date.now()}`;
+
   return prisma.$transaction(async (tx) => {
     const order = await tx.customerOrder.findUnique({
       where: { id: orderId },
@@ -129,6 +130,7 @@ export const cancelCustomerOrder = async (orderId: string, userId: string) => {
           quantity: -order.quantity,
           referenceType: 'CUSTOMER_ORDER',
           referenceId: order.id,
+          idempotencyKey: cancelIdempotencyKey,
           reason: `Released stock from cancelled Order ${order.orderNumber}`,
           createdById: userId,
         },

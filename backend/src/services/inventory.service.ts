@@ -1,5 +1,6 @@
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
+import crypto from 'crypto';
 
 export const getInventoryList = async (filters?: {
   locationId?: string;
@@ -59,18 +60,17 @@ export const updateStockLevel = async (
   batchId: string,
   quantityChange: number,
   reason: string,
-  idempotencyKey?: string,
+  idempotencyKeyInput?: string,
   userId?: string
 ) => {
+  const idempotencyKey = idempotencyKeyInput || `ADJUST-${crypto.randomUUID()}`;
+
   return prisma.$transaction(async (tx) => {
-    // Idempotency check
-    if (idempotencyKey) {
-      const existingTx = await tx.inventoryTransaction.findUnique({
-        where: { idempotencyKey },
-      });
-      if (existingTx) {
-        return tx.inventory.findUnique({ where: { id: existingTx.inventoryId } });
-      }
+    const existingTx = await tx.inventoryTransaction.findUnique({
+      where: { idempotencyKey },
+    });
+    if (existingTx) {
+      return tx.inventory.findUnique({ where: { id: existingTx.inventoryId } });
     }
 
     let inventory = await tx.inventory.findFirst({
@@ -102,7 +102,7 @@ export const updateStockLevel = async (
           inventoryId: inventory.id,
           type: 'INITIAL_STOCK',
           quantity: quantityChange,
-          idempotencyKey: idempotencyKey || null,
+          idempotencyKey,
           reason,
           createdById: userId || null,
         },
@@ -135,7 +135,7 @@ export const updateStockLevel = async (
         inventoryId: inventory.id,
         type: quantityChange >= 0 ? 'STOCK_ADD' : 'STOCK_REDUCE',
         quantity: quantityChange,
-        idempotencyKey: idempotencyKey || null,
+        idempotencyKey,
         reason,
         createdById: userId || null,
       },
