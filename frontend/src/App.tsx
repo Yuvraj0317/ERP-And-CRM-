@@ -2,8 +2,9 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { Navbar } from './components/Navbar';
+import { AppShell } from './components/AppShell';
 import { Login } from './pages/Login';
+import { DashboardPage } from './pages/Dashboard';
 import { InventoryPage } from './pages/Inventory';
 import { WorkOrdersPage } from './pages/WorkOrders';
 import { InternalTransfersPage } from './pages/InternalTransfers';
@@ -15,12 +16,7 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return <Navigate to="/login" replace />;
   }
 
-  return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 flex flex-col">
-      <Navbar />
-      <main className="flex-1 max-w-[1600px] w-full mx-auto p-4 sm:p-6 lg:p-8">{children}</main>
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 };
 
 export const App: React.FC = () => {
@@ -30,6 +26,15 @@ export const App: React.FC = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedLayout>
+                  <DashboardPage />
+                </ProtectedLayout>
+              }
+            />
 
             <Route
               path="/inventory"
@@ -67,7 +72,7 @@ export const App: React.FC = () => {
               }
             />
 
-            <Route path="*" element={<Navigate to="/inventory" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
