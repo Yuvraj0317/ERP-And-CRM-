@@ -1,258 +1,165 @@
+import { z } from 'zod';
+import { TransferRepository } from '../repositories/transfer.repository';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
-import { TransferStatus } from '../types';
-import crypto from 'crypto';
 
-export const createTransferRequest = async (data: {
-  sourceLocationId: string;
-  destinationLocationId: string;
-  itemId: string;
-  batchId: string;
-  quantity: number;
-  requestedById: string;
-}) => {
-  if (data.quantity <= 0) {
-    throw new AppError('Transfer quantity must be greater than zero', 400);
+export const CreateTransferSchema = z.object({
+  sourceLocationId: z.string().min(1, 'Source location ID is required'),
+  destinationLocationId: z.string().min(1, 'Destination location ID is required'),
+  itemId: z.string().min(1, 'Item ID is required'),
+  batchId: z.string().min(1, 'Batch ID is required'),
+  quantity: z
+    .number()
+    .int('Quantity must be a whole integer')
+    .positive('Quantity must be a positive number'),
+});
+
+export type CreateTransferInput = z.infer<typeof CreateTransferSchema>;
+
+export class StockTransferService {
+  private transferRepository: TransferRepository;
+
+  constructor() {
+    this.transferRepository = new TransferRepository();
   }
 
-  if (data.sourceLocationId === data.destinationLocationId) {
-    throw new AppError('Source and Destination locations must be different', 400);
+  async getTransfers() {
+    return this.transferRepository.findAll();
   }
 
-  const sourceInventory = await prisma.inventory.findFirst({
-    where: {
-      locationId: data.sourceLocationId,
-      itemId: data.itemId,
-      batchId: data.batchId,
-    },
-  });
-
-  const availableQuantity = sourceInventory
-    ? sourceInventory.physicalQuantity - sourceInventory.reservedQuantity
-    : 0;
-
-  if (availableQuantity < data.quantity) {
-    throw new AppError(
-      `Cannot transfer more than available inventory. Source available: ${availableQuantity}, Requested: ${data.quantity}`,
-      400
-    );
-  }
-
-  const count = await prisma.stockTransfer.count();
-  const transferNumber = `TR-2026-${String(count + 1).padStart(3, '0')}`;
-
-  const transfer = await prisma.stockTransfer.create({
-    data: {
-      transferNumber,
-      sourceLocationId: data.sourceLocationId,
-      destinationLocationId: data.destinationLocationId,
-      itemId: data.itemId,
-      batchId: data.batchId,
-      quantity: data.quantity,
-      status: TransferStatus.REQUESTED,
-      requestedById: data.requestedById,
-    },
-    include: {
-      sourceLocation: true,
-      destinationLocation: true,
-      item: true,
-      batch: true,
-      requestedBy: { select: { id: true, name: true, email: true } },
-    },
-  });
-
-  return transfer;
-};
-
-export const dispatchTransfer = async (transferId: string, dispatchedById: string) => {
-  const idempotencyKey = `DISPATCH-${transferId}-${Date.now()}`;
-
-  return prisma.$transaction(async (tx) => {
-    const transfer = await tx.stockTransfer.findUnique({
-      where: { id: transferId },
-    });
-
+  async getTransferById(id: string) {
+    const transfer = await this.transferRepository.findById(id);
     if (!transfer) {
       throw new AppError('Transfer request not found', 404);
     }
+    return transfer;
+  }
 
-    if (transfer.status !== TransferStatus.REQUESTED) {
-      throw new AppError(`Cannot dispatch transfer in '${transfer.status}' status`, 400);
+  async createTransferRequest(input: CreateTransferInput, requestedById: string) {
+    const parseResult = CreateTransferSchema.safeParse(input);
+    if (!parseResult.success) {
+      const issueMessage = parseResult.error.issues[0]?.message || 'Invalid transfer payload';
+      throw new AppError(`Validation Error: ${issueMessage}`, 400);
     }
 
-    const sourceInv = await tx.inventory.findFirst({
-      where: {
-        locationId: transfer.sourceLocationId,
-        itemId: transfer.itemId,
-        batchId: transfer.batchId,
-      },
-    });
+    const { sourceLocationId, destinationLocationId, itemId, batchId, quantity } = parseResult.data;
 
-    const available = sourceInv ? sourceInv.physicalQuantity - sourceInv.reservedQuantity : 0;
-    if (!sourceInv || available < transfer.quantity) {
+    // Rule: Source and destination locations must be different
+    if (sourceLocationId === destinationLocationId) {
+      throw new AppError('Source and Destination locations must be different', 400);
+    }
+
+    // Verify entity existence
+    const sourceLoc = await prisma.location.findUnique({ where: { id: sourceLocationId } });
+    if (!sourceLoc) {
+      throw new AppError('Source location not found', 404);
+    }
+
+    const destLoc = await prisma.location.findUnique({ where: { id: destinationLocationId } });
+    if (!destLoc) {
+      throw new AppError('Destination location not found', 404);
+    }
+
+    const item = await prisma.item.findUnique({ where: { id: itemId } });
+    if (!item) {
+      throw new AppError('Item not found', 404);
+    }
+
+    const batch = await prisma.batch.findUnique({ where: { id: batchId } });
+    if (!batch) {
+      throw new AppError('Batch not found', 404);
+    }
+
+    // Critical Rule: Batch/Item Composite Integrity Check
+    if (batch.itemId !== itemId) {
       throw new AppError(
-        `Insufficient available inventory at source location to dispatch transfer. Available: ${available}`,
+        `Batch integrity conflict: Batch '${batch.batchNumber}' does not belong to Item '${item.name}'`,
         400
       );
     }
 
-    const newPhysical = sourceInv.physicalQuantity - transfer.quantity;
-    const newAvailable = newPhysical - sourceInv.reservedQuantity;
-
-    await tx.inventory.update({
-      where: { id: sourceInv.id },
-      data: {
-        physicalQuantity: newPhysical,
-        availableQuantity: newAvailable,
+    // Verify source inventory record exists for item + source location + batch
+    const sourceInv = await prisma.inventory.findFirst({
+      where: {
+        locationId: sourceLocationId,
+        itemId,
+        batchId,
       },
     });
 
-    await tx.inventoryTransaction.create({
-      data: {
-        inventoryId: sourceInv.id,
-        type: 'TRANSFER_DISPATCH',
-        quantity: -transfer.quantity,
-        referenceType: 'TRANSFER',
-        referenceId: transfer.id,
-        idempotencyKey,
-        reason: `Dispatched Transfer ${transfer.transferNumber}`,
-        createdById: dispatchedById,
-      },
-    });
-
-    const updatedTransfer = await tx.stockTransfer.update({
-      where: { id: transferId },
-      data: {
-        status: TransferStatus.DISPATCHED,
-        dispatchedById,
-      },
-      include: {
-        sourceLocation: true,
-        destinationLocation: true,
-        item: true,
-        batch: true,
-        requestedBy: { select: { id: true, name: true } },
-        dispatchedBy: { select: { id: true, name: true } },
-      },
-    });
-
-    return updatedTransfer;
-  });
-};
-
-export const receiveTransfer = async (transferId: string, receivedById: string) => {
-  const idempotencyKey = `RECEIVE-${transferId}`;
-
-  return prisma.$transaction(async (tx) => {
-    // Idempotency check: prevent duplicate receipt
-    const existingTx = await tx.inventoryTransaction.findUnique({
-      where: { idempotencyKey },
-    });
-    if (existingTx) {
-      throw new AppError('Transfer has already been received. Duplicate receipt is forbidden.', 400);
+    if (!sourceInv) {
+      throw new AppError(
+        'Source inventory record does not exist for the requested item, location, and batch',
+        404
+      );
     }
 
-    const transfer = await tx.stockTransfer.findUnique({
-      where: { id: transferId },
-    });
+    // Generate unique transfer number
+    const count = await this.transferRepository.count();
+    const transferNumber = `TR-2026-${String(count + 1).padStart(3, '0')}`;
 
-    if (!transfer) {
+    // Note: Creating a transfer does NOT mutate inventory stock!
+    return this.transferRepository.create({
+      transferNumber,
+      sourceLocationId,
+      destinationLocationId,
+      itemId,
+      batchId,
+      quantity,
+      requestedById,
+    });
+  }
+
+  async dispatchTransfer(transferId: string, dispatchedById: string) {
+    const idempotencyKey = `DISPATCH-${transferId}`;
+
+    const result = await this.transferRepository.dispatch(transferId, dispatchedById, idempotencyKey);
+
+    if (result.error === 'NOT_FOUND') {
+      throw new AppError('Transfer request not found', 404);
+    }
+
+    if (result.error === 'INVALID_STATUS') {
+      throw new AppError(
+        `Invalid status transition: Cannot dispatch transfer in '${result.currentStatus}' status`,
+        400
+      );
+    }
+
+    if (result.error === 'SOURCE_INVENTORY_NOT_FOUND') {
+      throw new AppError('Source inventory record not found', 404);
+    }
+
+    if (result.error === 'INSUFFICIENT_STOCK') {
+      throw new AppError(
+        `Cannot dispatch more than available inventory stock. Available: ${result.available}`,
+        400
+      );
+    }
+
+    return result.transfer;
+  }
+
+  async receiveTransfer(transferId: string, receivedById: string) {
+    const idempotencyKey = `RECEIVE-${transferId}`;
+
+    const result = await this.transferRepository.receive(transferId, receivedById, idempotencyKey);
+
+    if (result.error === 'NOT_FOUND') {
       throw new AppError('Transfer record not found', 404);
     }
 
-    if (transfer.status === TransferStatus.RECEIVED) {
+    if (result.error === 'ALREADY_RECEIVED') {
       throw new AppError('Transfer has already been received. Duplicate receipt is forbidden.', 400);
     }
 
-    if (transfer.status !== TransferStatus.DISPATCHED) {
+    if (result.error === 'INVALID_STATUS') {
       throw new AppError(
-        `Cannot receive transfer. Transfer must be in 'DISPATCHED' status, current status is '${transfer.status}'`,
+        `Invalid status transition: Cannot receive transfer in '${result.currentStatus}' status`,
         400
       );
     }
 
-    let destInv = await tx.inventory.findFirst({
-      where: {
-        locationId: transfer.destinationLocationId,
-        itemId: transfer.itemId,
-        batchId: transfer.batchId,
-      },
-    });
-
-    let newPhysical: number;
-    let newAvailable: number;
-
-    if (!destInv) {
-      destInv = await tx.inventory.create({
-        data: {
-          itemId: transfer.itemId,
-          locationId: transfer.destinationLocationId,
-          batchId: transfer.batchId,
-          physicalQuantity: transfer.quantity,
-          reservedQuantity: 0,
-          availableQuantity: transfer.quantity,
-        },
-      });
-      newPhysical = transfer.quantity;
-      newAvailable = transfer.quantity;
-    } else {
-      newPhysical = destInv.physicalQuantity + transfer.quantity;
-      newAvailable = newPhysical - destInv.reservedQuantity;
-
-      await tx.inventory.update({
-        where: { id: destInv.id },
-        data: {
-          physicalQuantity: newPhysical,
-          availableQuantity: newAvailable,
-        },
-      });
-    }
-
-    await tx.inventoryTransaction.create({
-      data: {
-        inventoryId: destInv.id,
-        type: 'TRANSFER_RECEIVE',
-        quantity: transfer.quantity,
-        referenceType: 'TRANSFER',
-        referenceId: transfer.id,
-        idempotencyKey,
-        reason: `Received Transfer ${transfer.transferNumber}`,
-        createdById: receivedById,
-      },
-    });
-
-    const updatedTransfer = await tx.stockTransfer.update({
-      where: { id: transferId },
-      data: {
-        status: TransferStatus.RECEIVED,
-        receivedById,
-      },
-      include: {
-        sourceLocation: true,
-        destinationLocation: true,
-        item: true,
-        batch: true,
-        requestedBy: { select: { id: true, name: true } },
-        dispatchedBy: { select: { id: true, name: true } },
-        receivedBy: { select: { id: true, name: true } },
-      },
-    });
-
-    return updatedTransfer;
-  });
-};
-
-export const getTransfers = async () => {
-  return prisma.stockTransfer.findMany({
-    include: {
-      sourceLocation: true,
-      destinationLocation: true,
-      item: true,
-      batch: true,
-      requestedBy: { select: { id: true, name: true, email: true } },
-      dispatchedBy: { select: { id: true, name: true, email: true } },
-      receivedBy: { select: { id: true, name: true, email: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-};
+    return result.transfer;
+  }
+}

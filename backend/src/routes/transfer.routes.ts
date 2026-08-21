@@ -1,67 +1,30 @@
 import { Router } from 'express';
-import {
-  createTransferRequest,
-  dispatchTransfer,
-  receiveTransfer,
-  getTransfers,
-} from '../services/transfer.service';
+import { TransferController } from '../controllers/transfer.controller';
 import { authenticate, authorize } from '../middleware/auth';
-import { Role } from '../types';
+import { Role } from '@prisma/client';
 
 const router = Router();
+const transferController = new TransferController();
 
 router.use(authenticate);
 
-router.get('/', async (req, res, next) => {
-  try {
-    const transfers = await getTransfers();
-    res.json({ success: true, data: transfers });
-  } catch (error) {
-    next(error);
-  }
-});
+// Transfer Read endpoints: ADMIN, OPERATIONS, and SALES are permitted to view transfers
+router.get('/', (req, res, next) => transferController.getTransfers(req, res, next));
+router.get('/:id', (req, res, next) => transferController.getTransferById(req, res, next));
 
-router.post('/', authorize([Role.ADMIN, Role.OPERATIONS]), async (req, res, next) => {
-  try {
-    const { sourceLocationId, destinationLocationId, itemId, batchId, quantity } = req.body;
-    if (!sourceLocationId || !destinationLocationId || !itemId || !batchId || !quantity) {
-      return res.status(400).json({
-        success: false,
-        error: 'sourceLocationId, destinationLocationId, itemId, batchId, and quantity are required',
-      });
-    }
+// Transfer Creation: ADMIN & OPERATIONS only (SALES forbidden -> 403)
+router.post('/', authorize(Role.ADMIN, Role.OPERATIONS), (req, res, next) =>
+  transferController.createTransfer(req, res, next)
+);
 
-    const transfer = await createTransferRequest({
-      sourceLocationId,
-      destinationLocationId,
-      itemId,
-      batchId,
-      quantity: Number(quantity),
-      requestedById: req.user!.id,
-    });
+// Dispatch Transfer: ADMIN & OPERATIONS only (SALES forbidden -> 403)
+router.post('/:id/dispatch', authorize(Role.ADMIN, Role.OPERATIONS), (req, res, next) =>
+  transferController.dispatchTransfer(req, res, next)
+);
 
-    res.status(201).json({ success: true, data: transfer });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/:id/dispatch', authorize([Role.ADMIN, Role.OPERATIONS]), async (req, res, next) => {
-  try {
-    const transfer = await dispatchTransfer(req.params.id, req.user!.id);
-    res.json({ success: true, data: transfer });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/:id/receive', authorize([Role.ADMIN, Role.OPERATIONS]), async (req, res, next) => {
-  try {
-    const transfer = await receiveTransfer(req.params.id, req.user!.id);
-    res.json({ success: true, data: transfer });
-  } catch (error) {
-    next(error);
-  }
-});
+// Receive Transfer: ADMIN & OPERATIONS only (SALES forbidden -> 403)
+router.post('/:id/receive', authorize(Role.ADMIN, Role.OPERATIONS), (req, res, next) =>
+  transferController.receiveTransfer(req, res, next)
+);
 
 export default router;

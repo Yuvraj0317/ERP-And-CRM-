@@ -3,6 +3,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import workOrderRoutes from './routes/workOrder.routes';
+import transferRoutes from './routes/transfer.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 export const app = express();
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/work-orders', workOrderRoutes);
+app.use('/api/transfers', transferRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
