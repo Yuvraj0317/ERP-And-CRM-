@@ -158,12 +158,14 @@ export const WorkOrdersPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>Available at Location:</span>
-                    <span className="font-bold text-sky-600">{wo.availableAtLocation} {wo.item?.unit}</span>
+                    <span className="font-bold text-sky-600">
+                      {wo.currentAvailableQuantity ?? 0} {wo.item?.unit}
+                    </span>
                   </div>
 
                   <div className="border-t border-slate-200 pt-1.5 flex justify-between items-center font-sans">
                     <span className="font-bold text-slate-700">Shortage:</span>
-                    {wo.hasShortage ? (
+                    {wo.shortage > 0 ? (
                       <span className="flex items-center space-x-1 text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded border border-red-200 font-mono">
                         <AlertCircle className="h-3.5 w-3.5" />
                         <span>{wo.shortage} {wo.item?.unit}</span>

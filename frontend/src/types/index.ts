@@ -39,13 +39,13 @@ export interface InventoryItem {
   id: string;
   itemId: string;
   locationId: string;
-  batchId?: string;
+  batchId: string;
   physicalQuantity: number;
   reservedQuantity: number;
   availableQuantity: number;
   item: Item;
   location: Location;
-  batch?: Batch;
+  batch: Batch;
 }
 
 export type WorkOrderStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
@@ -60,13 +60,13 @@ export interface WorkOrder {
   status: WorkOrderStatus;
   createdById: string;
   createdAt: string;
+  updatedAt?: string;
   location: Location;
   item: Item;
   assignedUser: User;
   createdBy: User;
-  availableAtLocation: number;
+  currentAvailableQuantity?: number;
   shortage: number;
-  hasShortage: boolean;
 }
 
 export type TransferStatus = 'REQUESTED' | 'DISPATCHED' | 'RECEIVED';
@@ -77,15 +77,18 @@ export interface StockTransfer {
   sourceLocationId: string;
   destinationLocationId: string;
   itemId: string;
+  batchId: string;
   quantity: number;
   status: TransferStatus;
   requestedById: string;
   dispatchedById?: string;
   receivedById?: string;
   createdAt: string;
+  updatedAt?: string;
   sourceLocation: Location;
   destinationLocation: Location;
   item: Item;
+  batch: Batch;
   requestedBy: User;
   dispatchedBy?: User;
   receivedBy?: User;
@@ -103,6 +106,7 @@ export interface CustomerOrder {
   status: CustomerOrderStatus;
   salesUserId: string;
   createdAt: string;
+  updatedAt?: string;
   location: Location;
   item: Item;
   salesUser: User;

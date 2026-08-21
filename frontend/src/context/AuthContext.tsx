@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { User } from '../types';
 import { api } from '../services/api';
 
@@ -25,7 +25,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await api.post('/auth/login', { email, password });
-      const { token: jwtToken, user: userData } = res.data.data;
+      const jwtToken = res.data.token || res.data.data?.token;
+      const userData = res.data.user || res.data.data?.user;
+
       setToken(jwtToken);
       setUser(userData);
       localStorage.setItem('erp_token', jwtToken);
