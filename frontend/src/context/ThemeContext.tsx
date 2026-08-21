@@ -16,43 +16,45 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved && ['light', 'dark', 'system'].includes(saved) ? saved : 'system';
   });
 
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (theme === 'dark') return true;
-    if (theme === 'light') return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  const [isDark, setIsDark] = useState<boolean>(false);
+
+  const applyTheme = (targetTheme: Theme) => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    let activeDark = false;
+
+    if (targetTheme === 'dark') {
+      activeDark = true;
+    } else if (targetTheme === 'light') {
+      activeDark = false;
+    } else {
+      activeDark = mediaQuery.matches;
+    }
+
+    setIsDark(activeDark);
+    const root = document.documentElement;
+
+    if (activeDark) {
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    } else {
+      root.classList.remove('dark');
+      root.style.colorScheme = 'light';
+    }
+  };
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem('app_theme', newTheme);
+    applyTheme(newTheme);
   };
 
   useEffect(() => {
+    applyTheme(theme);
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const updateEffectiveTheme = () => {
-      let activeDark = false;
-      if (theme === 'dark') {
-        activeDark = true;
-      } else if (theme === 'light') {
-        activeDark = false;
-      } else {
-        activeDark = mediaQuery.matches;
-      }
-
-      setIsDark(activeDark);
-      if (activeDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    };
-
-    updateEffectiveTheme();
-
     const handleSystemChange = () => {
       if (theme === 'system') {
-        updateEffectiveTheme();
+        applyTheme('system');
       }
     };
 
