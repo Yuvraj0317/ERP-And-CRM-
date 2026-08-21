@@ -93,6 +93,23 @@ export const InternalTransfersPage: React.FC = () => {
   });
   const allProjectItems = Array.from(allProjectItemsMap.values());
 
+  // Map all project batches from inventories
+  const allProjectBatchesMap = new Map<string, { id: string; batchNumber: string; itemId: string; locationId: string; itemName?: string; availableQuantity: number }>();
+  inventories.forEach((inv) => {
+    if (inv.batch) {
+      const available = inv.physicalQuantity - inv.reservedQuantity;
+      allProjectBatchesMap.set(inv.batch.id, {
+        id: inv.batch.id,
+        batchNumber: inv.batch.batchNumber,
+        itemId: inv.itemId,
+        locationId: inv.locationId,
+        itemName: inv.item?.name,
+        availableQuantity: available,
+      });
+    }
+  });
+  const allProjectBatches = Array.from(allProjectBatchesMap.values());
+
   // Filter items matching selected Source Location
   const availableSourceInventory = inventories.filter(
     (inv) => inv.locationId === sourceLocationId
@@ -111,12 +128,19 @@ export const InternalTransfersPage: React.FC = () => {
     ).values()
   );
 
-  // Filter batches matching selected Source Location AND Item
-  const availableBatches = (sourceLocationId ? availableSourceInventory : inventories)
-    .filter((inv) => inv.itemId === itemId)
+  // Filter batches matching selected Item (and Source Location if selected)
+  const filteredBatches = inventories
+    .filter((inv) => {
+      const matchSource = !sourceLocationId || inv.locationId === sourceLocationId;
+      const matchItem = !itemId || inv.itemId === itemId;
+      return matchSource && matchItem;
+    })
     .map((inv) => ({
       id: inv.batch.id,
       batchNumber: inv.batch.batchNumber,
+      itemId: inv.itemId,
+      locationId: inv.locationId,
+      itemName: inv.item?.name,
       availableQuantity: inv.physicalQuantity - inv.reservedQuantity,
       locationName: inv.location?.name,
     }));
@@ -143,12 +167,10 @@ export const InternalTransfersPage: React.FC = () => {
         label: `${item.name} (${item.sku})`,
       }));
 
-  const batchOptions = itemId
-    ? availableBatches.map((b) => ({
-        value: b.id,
-        label: `Batch: ${b.batchNumber} (${b.locationName || 'Stock'}) — Available: ${b.availableQuantity} units`,
-      }))
-    : [];
+  const batchOptions = (filteredBatches.length > 0 ? filteredBatches : allProjectBatches).map((b) => ({
+    value: b.id,
+    label: `Batch: ${b.batchNumber} (${b.itemName || 'Item'}) — Available: ${b.availableQuantity} units`,
+  }));
 
   const handleSourceLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedSourceLoc = e.target.value;
@@ -172,6 +194,19 @@ export const InternalTransfersPage: React.FC = () => {
       if (match && match.locationId) {
         setSourceLocationId(match.locationId);
       }
+    }
+    setModalError('');
+  };
+
+  const handleBatchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedBatchId = e.target.value;
+    setBatchId(selectedBatchId);
+
+    // Auto-select Item and Source Location matching selected Batch if not set
+    const match = inventories.find((inv) => inv.batchId === selectedBatchId);
+    if (match) {
+      if (!itemId) setItemId(match.itemId);
+      if (!sourceLocationId) setSourceLocationId(match.locationId);
     }
     setModalError('');
   };
@@ -430,9 +465,8 @@ export const InternalTransfersPage: React.FC = () => {
               <Select
                 label="Source Batch Number"
                 value={batchId}
-                onChange={(e) => setBatchId(e.target.value)}
-                disabled={!itemId}
-                placeholder={itemId ? '-- Select Source Batch --' : '-- Select Item First --'}
+                onChange={handleBatchChange}
+                placeholder="-- Select Source Batch Number --"
                 options={batchOptions}
               />
 
