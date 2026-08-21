@@ -9,6 +9,7 @@ import { InventoryPage } from './pages/Inventory';
 import { WorkOrdersPage } from './pages/WorkOrders';
 import { InternalTransfersPage } from './pages/InternalTransfers';
 import { CustomerOrdersPage } from './pages/CustomerOrders';
+import { AnalyticsPage } from './pages/Analytics';
 
 const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -68,6 +69,15 @@ export const App: React.FC = () => {
               element={
                 <ProtectedLayout>
                   <CustomerOrdersPage />
+                </ProtectedLayout>
+              }
+            />
+
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedLayout>
+                  <AnalyticsPage />
                 </ProtectedLayout>
               }
             />
