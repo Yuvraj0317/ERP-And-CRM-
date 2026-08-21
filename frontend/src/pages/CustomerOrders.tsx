@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
-import { CustomerOrder, Location, InventoryItem } from '../types';
+import { CustomerOrder, Location, InventoryItem, Item } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
@@ -75,45 +75,82 @@ export const CustomerOrdersPage: React.FC = () => {
     setItemId('');
     setQuantity(10);
     setIsCreateOpen(true);
-    if (locations.length === 0) {
+    if (locations.length === 0 || inventories.length === 0) {
       await fetchMasterData();
     }
   };
 
-  // Filter items based on selected Fulfillment Location
-  const availableInventoriesForLocation = inventories.filter(
-    (inv) => inv.locationId === locationId
-  );
-
-  const availableItemsForLocation = Array.from(
-    new Map(
-      availableInventoriesForLocation.map((inv) => [
-        inv.item.id,
-        {
-          id: inv.item.id,
-          name: inv.item.name,
-          sku: inv.item.sku,
-          availableQuantity: inv.physicalQuantity - inv.reservedQuantity,
-        },
-      ])
-    ).values()
-  );
-
+  // Map unique locations
   const locationOptions = locations.map((loc) => ({
     value: loc.id,
     label: `${loc.name} (${loc.code})`,
   }));
 
+  // Map all project items from inventories
+  const allProjectItemsMap = new Map<string, { id: string; name: string; sku: string; locations: string[] }>();
+  inventories.forEach((inv) => {
+    if (inv.item) {
+      const existing = allProjectItemsMap.get(inv.item.id);
+      if (existing) {
+        if (inv.locationId && !existing.locations.includes(inv.locationId)) {
+          existing.locations.push(inv.locationId);
+        }
+      } else {
+        allProjectItemsMap.set(inv.item.id, {
+          id: inv.item.id,
+          name: inv.item.name,
+          sku: inv.item.sku,
+          locations: inv.locationId ? [inv.locationId] : [],
+        });
+      }
+    }
+  });
+
+  const allProjectItems = Array.from(allProjectItemsMap.values());
+
+  // Filter items if location is selected, or show all project items if location is not selected
   const itemOptions = locationId
-    ? availableItemsForLocation.map((item) => ({
+    ? inventories
+        .filter((inv) => inv.locationId === locationId)
+        .map((inv) => {
+          const available = inv.physicalQuantity - inv.reservedQuantity;
+          return {
+            value: inv.item.id,
+            label: `${inv.item.name} (${inv.item.sku}) — Available: ${available} units`,
+          };
+        })
+    : allProjectItems.map((item) => ({
         value: item.id,
-        label: `${item.name} (${item.sku}) — Available: ${item.availableQuantity} units`,
-      }))
-    : [];
+        label: `${item.name} (${item.sku})`,
+      }));
 
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setLocationId(e.target.value);
-    setItemId(''); // Reset item when location changes
+    const selectedLocId = e.target.value;
+    setLocationId(selectedLocId);
+
+    // If an item is already selected, check if it exists at new location
+    if (itemId && selectedLocId) {
+      const itemAtLoc = inventories.find(
+        (inv) => inv.locationId === selectedLocId && inv.itemId === itemId
+      );
+      if (!itemAtLoc) {
+        setItemId(''); // Clear item if not present at selected location
+      }
+    }
+    setModalError('');
+  };
+
+  const handleItemChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedItemId = e.target.value;
+    setItemId(selectedItemId);
+
+    // If no location is selected yet, auto-select first location that has this item
+    if (!locationId && selectedItemId) {
+      const matchingInv = inventories.find((inv) => inv.itemId === selectedItemId);
+      if (matchingInv && matchingInv.locationId) {
+        setLocationId(matchingInv.locationId);
+      }
+    }
     setModalError('');
   };
 
@@ -151,7 +188,7 @@ export const CustomerOrdersPage: React.FC = () => {
 
       setIsCreateOpen(false);
       fetchCustomerOrders();
-      fetchMasterData(); // Refresh stock levels
+      fetchMasterData();
     } catch (err: any) {
       setModalError(err.response?.data?.error || 'Failed to reserve stock for customer order');
     } finally {
@@ -328,13 +365,12 @@ export const CustomerOrdersPage: React.FC = () => {
                 options={locationOptions}
               />
 
-              {/* Item Required Dropdown (Cascades from Fulfillment Location) */}
+              {/* Item Required Dropdown (Always Enabled with Project Items) */}
               <Select
                 label="Item Required"
                 value={itemId}
-                onChange={(e) => setItemId(e.target.value)}
-                disabled={!locationId}
-                placeholder={locationId ? '-- Select Item Required --' : '-- Select Location First --'}
+                onChange={handleItemChange}
+                placeholder="-- Select Item Required --"
                 options={itemOptions}
               />
 
