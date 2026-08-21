@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { ENV } from '../config/env';
 
 export class AppError extends Error {
   statusCode: number;
@@ -16,11 +17,10 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  console.error('API Error:', err.message || err);
-
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
 
+  // Do not expose stack traces or internal SQL errors to API clients
   res.status(statusCode).json({
     success: false,
     error: message,

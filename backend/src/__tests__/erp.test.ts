@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { app } from '../index';
+import { app } from '../app';
 import { prisma } from '../utils/prisma';
 import bcrypt from 'bcryptjs';
-import { Role } from '../types';
+import { Role } from '@prisma/client';
 
 let adminToken: string;
 let opsToken: string;
@@ -24,28 +24,35 @@ beforeAll(async () => {
   await prisma.item.deleteMany();
   await prisma.category.deleteMany();
   await prisma.location.deleteMany();
-  await prisma.user.deleteMany();
 
   const passwordHash = await bcrypt.hash('password123', 10);
 
-  const admin = await prisma.user.create({
-    data: { email: 'testadmin@erp.com', password: passwordHash, name: 'Test Admin', role: Role.ADMIN },
+  await prisma.user.upsert({
+    where: { email: 'testadmin@erp.com' },
+    update: { password: passwordHash, role: Role.ADMIN },
+    create: { email: 'testadmin@erp.com', password: passwordHash, name: 'Test Admin', role: Role.ADMIN },
   });
-  const ops = await prisma.user.create({
-    data: { email: 'testops@erp.com', password: passwordHash, name: 'Test Ops', role: Role.OPERATIONS },
+
+  await prisma.user.upsert({
+    where: { email: 'testops@erp.com' },
+    update: { password: passwordHash, role: Role.OPERATIONS },
+    create: { email: 'testops@erp.com', password: passwordHash, name: 'Test Ops', role: Role.OPERATIONS },
   });
-  const sales = await prisma.user.create({
-    data: { email: 'testsales@erp.com', password: passwordHash, name: 'Test Sales', role: Role.SALES },
+
+  await prisma.user.upsert({
+    where: { email: 'testsales@erp.com' },
+    update: { password: passwordHash, role: Role.SALES },
+    create: { email: 'testsales@erp.com', password: passwordHash, name: 'Test Sales', role: Role.SALES },
   });
 
   const resAdmin = await request(app).post('/api/auth/login').send({ email: 'testadmin@erp.com', password: 'password123' });
-  adminToken = resAdmin.body.data.token;
+  adminToken = resAdmin.body.token;
 
   const resOps = await request(app).post('/api/auth/login').send({ email: 'testops@erp.com', password: 'password123' });
-  opsToken = resOps.body.data.token;
+  opsToken = resOps.body.token;
 
   const resSales = await request(app).post('/api/auth/login').send({ email: 'testsales@erp.com', password: 'password123' });
-  salesToken = resSales.body.data.token;
+  salesToken = resSales.body.token;
 
   const locA = await prisma.location.create({ data: { name: 'Test Location A', code: 'LOC-A' } });
   const locB = await prisma.location.create({ data: { name: 'Test Location B', code: 'LOC-B' } });
@@ -99,6 +106,7 @@ describe('Mini Operations ERP Mandatory Business Logic Tests', () => {
         sourceLocationId: locationAId,
         destinationLocationId: locationBId,
         itemId: itemId,
+        batchId: batchId,
         quantity: 200, // Available is 100
       });
 
@@ -116,6 +124,7 @@ describe('Mini Operations ERP Mandatory Business Logic Tests', () => {
         sourceLocationId: locationAId,
         destinationLocationId: locationBId,
         itemId: itemId,
+        batchId: batchId,
         quantity: 50,
       });
 

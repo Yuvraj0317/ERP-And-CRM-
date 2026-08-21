@@ -1,57 +1,77 @@
-import { prisma } from '../utils/prisma';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { ENV } from '../config/env';
+import { z } from 'zod';
+import { UserRepository } from '../repositories/user.repository';
+import { signToken } from '../utils/jwt';
 import { AppError } from '../middleware/errorHandler';
+import { AuthUserContext } from '../middleware/auth';
 
-export const loginUser = async (email: string, password: string) => {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    throw new AppError('Invalid email or password', 401);
+export const LoginSchema = z.object({
+  email: z.string().email('Invalid email address format'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+export type LoginInput = z.infer<typeof LoginSchema>;
+
+export interface LoginResult {
+  user: AuthUserContext;
+  token: string;
+}
+
+export class AuthService {
+  private userRepository: UserRepository;
+
+  constructor() {
+    this.userRepository = new UserRepository();
   }
 
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    throw new AppError('Invalid email or password', 401);
-  }
+  async login(input: LoginInput): Promise<LoginResult> {
+    const parseResult = LoginSchema.safeParse(input);
+    if (!parseResult.success) {
+      throw new AppError('Validation Error: Invalid email or password payload', 400);
+    }
 
-  const token = jwt.sign(
-    {
+    const { email, password } = parseResult.data;
+
+    const user = await this.userRepository.findByEmail(email);
+    if (!user) {
+      // Generic error message to prevent user enumeration
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    const token = signToken({
+      sub: user.id,
+      role: user.role,
+    });
+
+    const safeUser: AuthUserContext = {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
-    },
-    ENV.JWT_SECRET,
-    { expiresIn: '24h' }
-  );
+    };
 
-  return {
-    token,
-    user: {
+    return {
+      user: safeUser,
+      token,
+    };
+  }
+
+  async getMe(userId: string): Promise<AuthUserContext> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    return {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
-    },
-  };
-};
-
-export const getMe = async (userId: string) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
-  });
-
-  if (!user) {
-    throw new AppError('User not found', 404);
+    };
   }
-
-  return user;
-};
-
-export const getAllUsers = async () => {
-  return prisma.user.findMany({
-    select: { id: true, name: true, email: true, role: true },
-  });
-};
+}

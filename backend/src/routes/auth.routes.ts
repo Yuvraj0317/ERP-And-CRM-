@@ -1,38 +1,35 @@
 import { Router } from 'express';
-import { loginUser, getMe, getAllUsers } from '../services/auth.service';
-import { authenticate } from '../middleware/auth';
+import { AuthController } from '../controllers/auth.controller';
+import { authenticate, authorize } from '../middleware/auth';
+import { Role } from '@prisma/client';
 
 const router = Router();
+const authController = new AuthController();
 
-router.post('/login', async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, error: 'Email and password required' });
-    }
-    const result = await loginUser(email, password);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    next(error);
-  }
-});
+// Authentication Endpoints
+router.post('/login', (req, res, next) => authController.login(req, res, next));
+router.get('/me', authenticate, (req, res, next) => authController.getMe(req, res, next));
 
-router.get('/me', authenticate, async (req, res, next) => {
-  try {
-    const user = await getMe(req.user!.id);
-    res.json({ success: true, data: user });
-  } catch (error) {
-    next(error);
-  }
-});
+// Test-only Protected Routes for RBAC Permission Matrix Verification
+router.get(
+  '/test/admin-only',
+  authenticate,
+  authorize(Role.ADMIN),
+  (req, res) => authController.testAdminOnly(req, res)
+);
 
-router.get('/users', authenticate, async (req, res, next) => {
-  try {
-    const users = await getAllUsers();
-    res.json({ success: true, data: users });
-  } catch (error) {
-    next(error);
-  }
-});
+router.get(
+  '/test/ops-only',
+  authenticate,
+  authorize(Role.OPERATIONS),
+  (req, res) => authController.testOpsOnly(req, res)
+);
+
+router.get(
+  '/test/sales-only',
+  authenticate,
+  authorize(Role.SALES),
+  (req, res) => authController.testSalesOnly(req, res)
+);
 
 export default router;
