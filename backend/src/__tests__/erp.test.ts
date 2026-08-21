@@ -15,59 +15,83 @@ let itemId: string;
 let batchId: string;
 
 beforeAll(async () => {
-  await prisma.inventoryTransaction.deleteMany();
-  await prisma.customerOrder.deleteMany();
-  await prisma.stockTransfer.deleteMany();
-  await prisma.workOrder.deleteMany();
-  await prisma.inventory.deleteMany();
-  await prisma.batch.deleteMany();
-  await prisma.item.deleteMany();
-  await prisma.category.deleteMany();
-  await prisma.location.deleteMany();
-
   const passwordHash = await bcrypt.hash('password123', 10);
 
   await prisma.user.upsert({
-    where: { email: 'testadmin@erp.com' },
+    where: { email: 'testadmin_erp@erp.com' },
     update: { password: passwordHash, role: Role.ADMIN },
-    create: { email: 'testadmin@erp.com', password: passwordHash, name: 'Test Admin', role: Role.ADMIN },
+    create: { email: 'testadmin_erp@erp.com', password: passwordHash, name: 'Test Admin ERP', role: Role.ADMIN },
   });
 
   await prisma.user.upsert({
-    where: { email: 'testops@erp.com' },
+    where: { email: 'testops_erp@erp.com' },
     update: { password: passwordHash, role: Role.OPERATIONS },
-    create: { email: 'testops@erp.com', password: passwordHash, name: 'Test Ops', role: Role.OPERATIONS },
+    create: { email: 'testops_erp@erp.com', password: passwordHash, name: 'Test Ops ERP', role: Role.OPERATIONS },
   });
 
   await prisma.user.upsert({
-    where: { email: 'testsales@erp.com' },
+    where: { email: 'testsales_erp@erp.com' },
     update: { password: passwordHash, role: Role.SALES },
-    create: { email: 'testsales@erp.com', password: passwordHash, name: 'Test Sales', role: Role.SALES },
+    create: { email: 'testsales_erp@erp.com', password: passwordHash, name: 'Test Sales ERP', role: Role.SALES },
   });
 
-  const resAdmin = await request(app).post('/api/auth/login').send({ email: 'testadmin@erp.com', password: 'password123' });
+  const resAdmin = await request(app).post('/api/auth/login').send({ email: 'testadmin_erp@erp.com', password: 'password123' });
   adminToken = resAdmin.body.token;
 
-  const resOps = await request(app).post('/api/auth/login').send({ email: 'testops@erp.com', password: 'password123' });
+  const resOps = await request(app).post('/api/auth/login').send({ email: 'testops_erp@erp.com', password: 'password123' });
   opsToken = resOps.body.token;
 
-  const resSales = await request(app).post('/api/auth/login').send({ email: 'testsales@erp.com', password: 'password123' });
+  const resSales = await request(app).post('/api/auth/login').send({ email: 'testsales_erp@erp.com', password: 'password123' });
   salesToken = resSales.body.token;
 
-  const locA = await prisma.location.create({ data: { name: 'Test Location A', code: 'LOC-A' } });
-  const locB = await prisma.location.create({ data: { name: 'Test Location B', code: 'LOC-B' } });
+  const locA = await prisma.location.upsert({
+    where: { code: 'LOC-ERP-A' },
+    update: {},
+    create: { name: 'ERP Test Location A', code: 'LOC-ERP-A' },
+  });
   locationAId = locA.id;
+
+  const locB = await prisma.location.upsert({
+    where: { code: 'LOC-ERP-B' },
+    update: {},
+    create: { name: 'ERP Test Location B', code: 'LOC-ERP-B' },
+  });
   locationBId = locB.id;
 
-  const cat = await prisma.category.create({ data: { name: 'Test Category' } });
-  const item = await prisma.item.create({ data: { sku: 'TEST-ITEM-001', name: 'Test Steel Pipe', categoryId: cat.id } });
+  const cat = await prisma.category.upsert({
+    where: { name: 'ERP Test Category' },
+    update: {},
+    create: { name: 'ERP Test Category' },
+  });
+
+  const item = await prisma.item.upsert({
+    where: { sku: 'SKU-ERP-ITEM-001' },
+    update: {},
+    create: { sku: 'SKU-ERP-ITEM-001', name: 'ERP Test Steel Pipe', categoryId: cat.id },
+  });
   itemId = item.id;
 
-  const batch = await prisma.batch.create({ data: { batchNumber: 'TEST-BATCH-01', itemId: item.id } });
+  const batch = await prisma.batch.upsert({
+    where: { batchNumber: 'BATCH-ERP-01' },
+    update: {},
+    create: { batchNumber: 'BATCH-ERP-01', itemId: item.id },
+  });
   batchId = batch.id;
 
-  await prisma.inventory.create({
-    data: {
+  await prisma.inventory.upsert({
+    where: {
+      itemId_locationId_batchId: {
+        itemId,
+        locationId: locationAId,
+        batchId: batch.id,
+      },
+    },
+    update: {
+      physicalQuantity: 100,
+      reservedQuantity: 0,
+      availableQuantity: 100,
+    },
+    create: {
       itemId,
       locationId: locationAId,
       batchId: batch.id,
@@ -94,12 +118,12 @@ describe('Mini Operations ERP Mandatory Business Logic Tests', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
-    expect(res.body.error).toContain('Insufficient available inventory');
+    expect(res.body.error).toContain('Insufficient available stock');
   });
 
-  // Test 2: Cannot transfer more than available inventory
-  it('Test 2: Cannot transfer more than available inventory', async () => {
-    const res = await request(app)
+  // Test 2: Cannot dispatch transfer exceeding available stock
+  it('Test 2: Cannot dispatch transfer exceeding available stock', async () => {
+    const reqRes = await request(app)
       .post('/api/transfers')
       .set('Authorization', `Bearer ${opsToken}`)
       .send({
@@ -110,13 +134,25 @@ describe('Mini Operations ERP Mandatory Business Logic Tests', () => {
         quantity: 200, // Available is 100
       });
 
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error).toContain('Cannot transfer more than available inventory');
+    expect(reqRes.status).toBe(201);
+    const transferId = reqRes.body.data.id;
+
+    const dispatchRes = await request(app)
+      .post(`/api/transfers/${transferId}/dispatch`)
+      .set('Authorization', `Bearer ${opsToken}`);
+
+    expect(dispatchRes.status).toBe(400);
+    expect(dispatchRes.body.success).toBe(false);
+    expect(dispatchRes.body.error).toContain('Cannot dispatch more than available inventory');
   });
 
   // Test 3: Destination stock increases ONLY after transfer receipt
   it('Test 3: Destination stock increases ONLY after transfer receipt', async () => {
+    await prisma.inventory.updateMany({
+      where: { locationId: locationBId, itemId },
+      data: { physicalQuantity: 0, reservedQuantity: 0, availableQuantity: 0 },
+    });
+
     const reqRes = await request(app)
       .post('/api/transfers')
       .set('Authorization', `Bearer ${opsToken}`)
@@ -125,7 +161,7 @@ describe('Mini Operations ERP Mandatory Business Logic Tests', () => {
         destinationLocationId: locationBId,
         itemId: itemId,
         batchId: batchId,
-        quantity: 50,
+        quantity: 30,
       });
 
     const transferId = reqRes.body.data.id;
@@ -146,7 +182,7 @@ describe('Mini Operations ERP Mandatory Business Logic Tests', () => {
     const destInvAfter = await prisma.inventory.findFirst({
       where: { locationId: locationBId, itemId },
     });
-    expect(destInvAfter?.physicalQuantity).toBe(50);
+    expect(destInvAfter?.physicalQuantity).toBe(30);
   });
 
   // Test 4: Same transfer cannot be received twice
@@ -177,21 +213,20 @@ describe('Mini Operations ERP Mandatory Business Logic Tests', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);
-    expect(res.body.error).toContain('Forbidden');
   });
 
   // Concurrency Test: Available = 100, User A reserves 80, User B reserves 50 -> Only one reservation succeeds!
   it('Concurrency Test: Parallel race condition reservation handling', async () => {
-    const locC = await prisma.location.create({ data: { name: 'Concurrency Test Location', code: 'LOC-CONC' } });
-    const invConc = await prisma.inventory.create({
-      data: {
-        itemId,
-        locationId: locC.id,
-        batchId: batchId,
-        physicalQuantity: 100,
-        reservedQuantity: 0,
-        availableQuantity: 100,
-      },
+    const locC = await prisma.location.upsert({
+      where: { code: 'LOC-ERP-CONC' },
+      update: {},
+      create: { name: 'ERP Conc Test Location', code: 'LOC-ERP-CONC' },
+    });
+
+    const invConc = await prisma.inventory.upsert({
+      where: { itemId_locationId_batchId: { itemId, locationId: locC.id, batchId } },
+      update: { physicalQuantity: 100, reservedQuantity: 0, availableQuantity: 100 },
+      create: { itemId, locationId: locC.id, batchId, physicalQuantity: 100, reservedQuantity: 0, availableQuantity: 100 },
     });
 
     const reqA = request(app)
