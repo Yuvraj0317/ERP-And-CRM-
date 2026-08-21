@@ -5,12 +5,16 @@ import inventoryRoutes from './routes/inventory.routes';
 import workOrderRoutes from './routes/workOrder.routes';
 import transferRoutes from './routes/transfer.routes';
 import customerOrderRoutes from './routes/customerOrder.routes';
+import { setupSwagger } from './swagger';
 import { errorHandler } from './middleware/errorHandler';
 
 export const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Mount Swagger OpenAPI Documentation UI at /api-docs
+setupSwagger(app);
 
 // Routes
 app.use('/api/auth', authRoutes);
