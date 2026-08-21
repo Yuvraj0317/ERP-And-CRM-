@@ -1,163 +1,113 @@
+import { z } from 'zod';
+import { CustomerOrderRepository } from '../repositories/customerOrder.repository';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
-import { CustomerOrderStatus } from '../types';
 import crypto from 'crypto';
 
-export const createCustomerOrder = async (data: {
-  customerName: string;
-  locationId: string;
-  itemId: string;
-  quantity: number;
-  salesUserId: string;
-  idempotencyKey?: string;
-}) => {
-  if (data.quantity <= 0) {
-    throw new AppError('Order quantity must be greater than zero', 400);
+export const CreateCustomerOrderSchema = z.object({
+  customerName: z.string().min(1, 'Customer name is required'),
+  locationId: z.string().min(1, 'Location ID is required'),
+  itemId: z.string().min(1, 'Item ID is required'),
+  quantity: z
+    .number()
+    .int('Quantity must be a whole integer')
+    .positive('Quantity must be a positive number'),
+});
+
+export type CreateCustomerOrderInput = z.infer<typeof CreateCustomerOrderSchema>;
+
+export class CustomerOrderService {
+  private customerOrderRepository: CustomerOrderRepository;
+
+  constructor() {
+    this.customerOrderRepository = new CustomerOrderRepository();
   }
 
-  const idempotencyKey = data.idempotencyKey || `RESERVE-${crypto.randomUUID()}`;
+  async getCustomerOrders() {
+    return this.customerOrderRepository.findAll();
+  }
 
-  return prisma.$transaction(async (tx) => {
-    const existingTx = await tx.inventoryTransaction.findUnique({
-      where: { idempotencyKey },
-    });
-    if (existingTx && existingTx.referenceId) {
-      return tx.customerOrder.findUnique({
-        where: { id: existingTx.referenceId },
-        include: { location: true, item: true, salesUser: true },
-      });
-    }
-
-    const inventory = await tx.inventory.findFirst({
-      where: {
-        locationId: data.locationId,
-        itemId: data.itemId,
-      },
-    });
-
-    if (!inventory) {
-      throw new AppError('No inventory record found for the requested item at this location', 404);
-    }
-
-    const updatedCount = await tx.$executeRaw`
-      UPDATE "Inventory"
-      SET 
-        "reservedQuantity" = "reservedQuantity" + ${data.quantity},
-        "availableQuantity" = "availableQuantity" - ${data.quantity},
-        "updatedAt" = CURRENT_TIMESTAMP
-      WHERE "id" = ${inventory.id}
-        AND "availableQuantity" >= ${data.quantity}
-    `;
-
-    if (updatedCount === 0) {
-      throw new AppError('Insufficient available inventory for stock reservation', 400);
-    }
-
-    const count = await tx.customerOrder.count();
-    const orderNumber = `CO-2026-${String(count + 1).padStart(3, '0')}`;
-
-    const order = await tx.customerOrder.create({
-      data: {
-        orderNumber,
-        customerName: data.customerName,
-        locationId: data.locationId,
-        itemId: data.itemId,
-        quantity: data.quantity,
-        status: CustomerOrderStatus.RESERVED,
-        salesUserId: data.salesUserId,
-      },
-      include: {
-        location: true,
-        item: true,
-        salesUser: { select: { id: true, name: true, email: true } },
-      },
-    });
-
-    await tx.inventoryTransaction.create({
-      data: {
-        inventoryId: inventory.id,
-        type: 'RESERVATION',
-        quantity: data.quantity,
-        referenceType: 'CUSTOMER_ORDER',
-        referenceId: order.id,
-        idempotencyKey,
-        reason: `Reserved stock for Customer Order ${orderNumber}`,
-        createdById: data.salesUserId,
-      },
-    });
-
-    return order;
-  });
-};
-
-export const cancelCustomerOrder = async (orderId: string, userId: string) => {
-  const cancelIdempotencyKey = `CANCEL-${orderId}-${Date.now()}`;
-
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.customerOrder.findUnique({
-      where: { id: orderId },
-    });
-
+  async getCustomerOrderById(id: string) {
+    const order = await this.customerOrderRepository.findById(id);
     if (!order) {
-      throw new AppError('Customer order not found', 404);
+      throw new AppError('Customer Order not found', 404);
+    }
+    return order;
+  }
+
+  async createCustomerOrder(input: CreateCustomerOrderInput, salesUserId: string, headerIdempotencyKey?: string) {
+    const parseResult = CreateCustomerOrderSchema.safeParse(input);
+    if (!parseResult.success) {
+      const issueMessage = parseResult.error.issues[0]?.message || 'Invalid Customer Order payload';
+      throw new AppError(`Validation Error: ${issueMessage}`, 400);
     }
 
-    if (order.status !== CustomerOrderStatus.RESERVED) {
-      throw new AppError(`Cannot cancel order with status '${order.status}'`, 400);
+    const { customerName, locationId, itemId, quantity } = parseResult.data;
+
+    // Verify entity existence
+    const location = await prisma.location.findUnique({ where: { id: locationId } });
+    if (!location) {
+      throw new AppError('Location not found', 404);
     }
 
-    const inventory = await tx.inventory.findFirst({
-      where: {
-        locationId: order.locationId,
-        itemId: order.itemId,
-      },
-    });
+    const item = await prisma.item.findUnique({ where: { id: itemId } });
+    if (!item) {
+      throw new AppError('Item not found', 404);
+    }
 
-    if (inventory) {
-      await tx.$executeRaw`
-        UPDATE "Inventory"
-        SET 
-          "reservedQuantity" = GREATEST(0, "reservedQuantity" - ${order.quantity}),
-          "availableQuantity" = "physicalQuantity" - GREATEST(0, "reservedQuantity" - ${order.quantity}),
-          "updatedAt" = CURRENT_TIMESTAMP
-        WHERE "id" = ${inventory.id}
-      `;
+    // Generate unique Customer Order number
+    const count = await this.customerOrderRepository.count();
+    const uniqueSuffix = crypto.randomBytes(2).toString('hex').toUpperCase();
+    const orderNumber = `CO-2026-${String(count + 1).padStart(3, '0')}-${uniqueSuffix}`;
+    const idempotencyKey = headerIdempotencyKey || `RESERVE-${orderNumber}-${crypto.randomUUID()}`;
 
-      await tx.inventoryTransaction.create({
-        data: {
-          inventoryId: inventory.id,
-          type: 'RELEASE',
-          quantity: -order.quantity,
-          referenceType: 'CUSTOMER_ORDER',
-          referenceId: order.id,
-          idempotencyKey: cancelIdempotencyKey,
-          reason: `Released stock from cancelled Order ${order.orderNumber}`,
-          createdById: userId,
-        },
+    try {
+      const result = await this.customerOrderRepository.reserveStockAndCreateOrder({
+        orderNumber,
+        customerName,
+        locationId,
+        itemId,
+        quantity,
+        salesUserId,
+        idempotencyKey,
       });
+
+      if (result.error === 'INSUFFICIENT_STOCK') {
+        throw new AppError(
+          `Insufficient available stock for reservation. Available: ${result.available}, Requested: ${quantity}`,
+          400
+        );
+      }
+
+      return result.order;
+    } catch (error: any) {
+      if (error.message === 'CONCURRENCY_STOCK_RACE' || error.code === 'P2034') {
+        throw new AppError('Insufficient available stock for reservation due to concurrent request', 400);
+      }
+      throw error;
+    }
+  }
+
+  async cancelCustomerOrder(orderId: string, userId: string) {
+    const idempotencyKey = `RELEASE-${orderId}`;
+
+    const result = await this.customerOrderRepository.cancelOrderAndReleaseStock(orderId, userId, idempotencyKey);
+
+    if (result.error === 'NOT_FOUND') {
+      throw new AppError('Customer Order not found', 404);
     }
 
-    const updated = await tx.customerOrder.update({
-      where: { id: orderId },
-      data: { status: CustomerOrderStatus.CANCELLED },
-      include: {
-        location: true,
-        item: true,
-        salesUser: { select: { id: true, name: true } },
-      },
-    });
+    if (result.error === 'ALREADY_CANCELLED') {
+      throw new AppError('Customer Order has already been cancelled. Duplicate release is forbidden.', 400);
+    }
 
-    return updated;
-  });
-};
+    if (result.error === 'INVALID_STATUS') {
+      throw new AppError(
+        `Invalid status transition: Cannot cancel order in '${result.currentStatus}' status`,
+        400
+      );
+    }
 
-export const getCustomerOrders = async () => {
-  return prisma.customerOrder.findMany({
-    include: {
-      location: true,
-      item: true,
-      salesUser: { select: { id: true, name: true, email: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-};
+    return result.order;
+  }
+}

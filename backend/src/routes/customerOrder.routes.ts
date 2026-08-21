@@ -1,57 +1,25 @@
 import { Router } from 'express';
-import {
-  createCustomerOrder,
-  cancelCustomerOrder,
-  getCustomerOrders,
-} from '../services/customerOrder.service';
+import { CustomerOrderController } from '../controllers/customerOrder.controller';
 import { authenticate, authorize } from '../middleware/auth';
-import { Role } from '../types';
+import { Role } from '@prisma/client';
 
 const router = Router();
+const customerOrderController = new CustomerOrderController();
 
 router.use(authenticate);
 
-router.get('/', async (req, res, next) => {
-  try {
-    const orders = await getCustomerOrders();
-    res.json({ success: true, data: orders });
-  } catch (error) {
-    next(error);
-  }
-});
+// Customer Order Read endpoints: ADMIN, OPERATIONS, and SALES are permitted to view orders
+router.get('/', (req, res, next) => customerOrderController.getCustomerOrders(req, res, next));
+router.get('/:id', (req, res, next) => customerOrderController.getCustomerOrderById(req, res, next));
 
-// Sales user and Admin can create customer orders & reserve stock
-router.post('/', authorize([Role.ADMIN, Role.SALES]), async (req, res, next) => {
-  try {
-    const { customerName, locationId, itemId, quantity } = req.body;
-    if (!customerName || !locationId || !itemId || !quantity) {
-      return res.status(400).json({
-        success: false,
-        error: 'customerName, locationId, itemId, and quantity are required',
-      });
-    }
+// Customer Order Creation: SALES & ADMIN only (OPERATIONS forbidden -> 403)
+router.post('/', authorize(Role.SALES, Role.ADMIN), (req, res, next) =>
+  customerOrderController.createCustomerOrder(req, res, next)
+);
 
-    const order = await createCustomerOrder({
-      customerName,
-      locationId,
-      itemId,
-      quantity: Number(quantity),
-      salesUserId: req.user!.id,
-    });
-
-    res.status(201).json({ success: true, data: order });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/:id/cancel', authorize([Role.ADMIN, Role.SALES]), async (req, res, next) => {
-  try {
-    const order = await cancelCustomerOrder(req.params.id, req.user!.id);
-    res.json({ success: true, data: order });
-  } catch (error) {
-    next(error);
-  }
-});
+// Customer Order Cancellation: SALES & ADMIN only (OPERATIONS forbidden -> 403)
+router.post('/:id/cancel', authorize(Role.SALES, Role.ADMIN), (req, res, next) =>
+  customerOrderController.cancelCustomerOrder(req, res, next)
+);
 
 export default router;
