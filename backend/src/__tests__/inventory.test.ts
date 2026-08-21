@@ -350,8 +350,20 @@ describe('Phase 3: Inventory Management Engine Integration Tests', () => {
       update: {},
       create: { name: 'Conc Inventory Loc', code: 'LOC-CONC-INV' },
     });
-    const invConc = await prisma.inventory.create({
-      data: {
+    const invConc = await prisma.inventory.upsert({
+      where: {
+        itemId_locationId_batchId: {
+          itemId: testItemId,
+          locationId: locConc.id,
+          batchId: testBatchId,
+        },
+      },
+      update: {
+        physicalQuantity: 100,
+        reservedQuantity: 0,
+        availableQuantity: 100,
+      },
+      create: {
         itemId: testItemId,
         locationId: locConc.id,
         batchId: testBatchId,

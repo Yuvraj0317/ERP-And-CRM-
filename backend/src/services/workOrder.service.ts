@@ -1,112 +1,161 @@
+import { z } from 'zod';
+import { WorkOrderRepository } from '../repositories/workOrder.repository';
+import { UserRepository } from '../repositories/user.repository';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
-import { WorkOrderStatus } from '../types';
+import { WorkOrderStatus } from '@prisma/client';
 
-export const createWorkOrder = async (data: {
-  locationId: string;
-  itemId: string;
-  requiredQuantity: number;
-  assignedUserId: string;
-  createdById: string;
-}) => {
-  if (data.requiredQuantity <= 0) {
-    throw new AppError('Required quantity must be greater than zero', 400);
+export const CreateWorkOrderSchema = z.object({
+  locationId: z.string().min(1, 'Location ID is required'),
+  itemId: z.string().min(1, 'Item ID is required'),
+  requiredQuantity: z
+    .number()
+    .int('Required quantity must be a whole integer')
+    .positive('Required quantity must be a positive number'),
+  assignedUserId: z.string().min(1, 'Assigned User ID is required'),
+});
+
+export type CreateWorkOrderInput = z.infer<typeof CreateWorkOrderSchema>;
+
+export class WorkOrderService {
+  private workOrderRepository: WorkOrderRepository;
+  private userRepository: UserRepository;
+
+  constructor() {
+    this.workOrderRepository = new WorkOrderRepository();
+    this.userRepository = new UserRepository();
   }
 
-  const count = await prisma.workOrder.count();
-  const workOrderNumber = `WO-2026-${String(count + 1).padStart(3, '0')}`;
+  // Dynamic shortage computation logic
+  private calculateShortage(requiredQuantity: number, currentAvailableQuantity: number): number {
+    return Math.max(0, requiredQuantity - currentAvailableQuantity);
+  }
 
-  const workOrder = await prisma.workOrder.create({
-    data: {
+  async getWorkOrders() {
+    const workOrders = await this.workOrderRepository.findAll();
+
+    return Promise.all(
+      workOrders.map(async (wo) => {
+        const availableQuantity = await this.workOrderRepository.getItemAvailableQuantity(
+          wo.locationId,
+          wo.itemId
+        );
+        const shortage = this.calculateShortage(wo.requiredQuantity, availableQuantity);
+
+        return {
+          ...wo,
+          currentAvailableQuantity: availableQuantity,
+          shortage,
+        };
+      })
+    );
+  }
+
+  async getWorkOrderById(id: string) {
+    const wo = await this.workOrderRepository.findById(id);
+    if (!wo) {
+      throw new AppError('Work Order not found', 404);
+    }
+
+    const availableQuantity = await this.workOrderRepository.getItemAvailableQuantity(
+      wo.locationId,
+      wo.itemId
+    );
+    const shortage = this.calculateShortage(wo.requiredQuantity, availableQuantity);
+
+    return {
+      ...wo,
+      currentAvailableQuantity: availableQuantity,
+      shortage,
+    };
+  }
+
+  async createWorkOrder(input: CreateWorkOrderInput, createdById: string) {
+    const parseResult = CreateWorkOrderSchema.safeParse(input);
+    if (!parseResult.success) {
+      const issueMessage = parseResult.error.issues[0]?.message || 'Invalid Work Order payload';
+      throw new AppError(`Validation Error: ${issueMessage}`, 400);
+    }
+
+    const { locationId, itemId, requiredQuantity, assignedUserId } = parseResult.data;
+
+    // Verify entity existence
+    const location = await prisma.location.findUnique({ where: { id: locationId } });
+    if (!location) {
+      throw new AppError('Target Location not found', 404);
+    }
+
+    const item = await prisma.item.findUnique({ where: { id: itemId } });
+    if (!item) {
+      throw new AppError('Requested Item not found', 404);
+    }
+
+    const assignedUser = await this.userRepository.findById(assignedUserId);
+    if (!assignedUser) {
+      throw new AppError('Assigned User not found', 404);
+    }
+
+    // Generate unique Work Order Number
+    const count = await this.workOrderRepository.count();
+    const workOrderNumber = `WO-2026-${String(count + 1).padStart(3, '0')}`;
+
+    // Note: Creating a Work Order NEVER mutates or reserves inventory!
+    const wo = await this.workOrderRepository.create({
       workOrderNumber,
-      locationId: data.locationId,
-      itemId: data.itemId,
-      requiredQuantity: data.requiredQuantity,
-      assignedUserId: data.assignedUserId,
-      createdById: data.createdById,
+      locationId,
+      itemId,
+      requiredQuantity,
+      assignedUserId,
+      createdById,
       status: WorkOrderStatus.ASSIGNED,
-    },
-    include: {
-      location: true,
-      item: true,
-      assignedUser: { select: { id: true, name: true, email: true, role: true } },
-      createdBy: { select: { id: true, name: true, email: true } },
-    },
-  });
+    });
 
-  return attachShortageCalculation(workOrder);
-};
+    const availableQuantity = await this.workOrderRepository.getItemAvailableQuantity(
+      wo.locationId,
+      wo.itemId
+    );
+    const shortage = this.calculateShortage(wo.requiredQuantity, availableQuantity);
 
-export const getWorkOrders = async () => {
-  const workOrders = await prisma.workOrder.findMany({
-    include: {
-      location: true,
-      item: true,
-      assignedUser: { select: { id: true, name: true, email: true, role: true } },
-      createdBy: { select: { id: true, name: true, email: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  return Promise.all(workOrders.map(attachShortageCalculation));
-};
-
-export const getWorkOrderById = async (id: string) => {
-  const workOrder = await prisma.workOrder.findUnique({
-    where: { id },
-    include: {
-      location: true,
-      item: true,
-      assignedUser: { select: { id: true, name: true, email: true, role: true } },
-      createdBy: { select: { id: true, name: true, email: true } },
-    },
-  });
-
-  if (!workOrder) {
-    throw new AppError('Work Order not found', 404);
+    return {
+      ...wo,
+      currentAvailableQuantity: availableQuantity,
+      shortage,
+    };
   }
 
-  return attachShortageCalculation(workOrder);
-};
+  async updateWorkOrderStatus(id: string, newStatus: string, userId: string) {
+    if (!Object.values(WorkOrderStatus).includes(newStatus as WorkOrderStatus)) {
+      throw new AppError(`Invalid Work Order status '${newStatus}'`, 400);
+    }
 
-export const updateWorkOrderStatus = async (id: string, status: WorkOrderStatus) => {
-  const workOrder = await prisma.workOrder.findUnique({ where: { id } });
-  if (!workOrder) {
-    throw new AppError('Work Order not found', 404);
+    const targetStatus = newStatus as WorkOrderStatus;
+    const wo = await this.workOrderRepository.findById(id);
+
+    if (!wo) {
+      throw new AppError('Work Order not found', 404);
+    }
+
+    // Validate lifecycle status transitions
+    if (wo.status === WorkOrderStatus.COMPLETED && targetStatus !== WorkOrderStatus.COMPLETED) {
+      throw new AppError('Invalid status transition: Completed Work Orders cannot be moved backwards', 400);
+    }
+
+    if (wo.status === WorkOrderStatus.IN_PROGRESS && targetStatus === WorkOrderStatus.ASSIGNED) {
+      throw new AppError('Invalid status transition: Cannot revert In-Progress Work Order back to Assigned', 400);
+    }
+
+    const updated = await this.workOrderRepository.updateStatus(id, targetStatus);
+
+    const availableQuantity = await this.workOrderRepository.getItemAvailableQuantity(
+      updated.locationId,
+      updated.itemId
+    );
+    const shortage = this.calculateShortage(updated.requiredQuantity, availableQuantity);
+
+    return {
+      ...updated,
+      currentAvailableQuantity: availableQuantity,
+      shortage,
+    };
   }
-
-  const updated = await prisma.workOrder.update({
-    where: { id },
-    data: { status },
-    include: {
-      location: true,
-      item: true,
-      assignedUser: { select: { id: true, name: true, email: true, role: true } },
-    },
-  });
-
-  return attachShortageCalculation(updated);
-};
-
-const attachShortageCalculation = async (workOrder: any) => {
-  const inventories = await prisma.inventory.findMany({
-    where: {
-      itemId: workOrder.itemId,
-      locationId: workOrder.locationId,
-    },
-  });
-
-  const availableAtLocation = inventories.reduce(
-    (acc, inv) => acc + (inv.physicalQuantity - inv.reservedQuantity),
-    0
-  );
-
-  const shortage = Math.max(0, workOrder.requiredQuantity - availableAtLocation);
-
-  return {
-    ...workOrder,
-    availableAtLocation,
-    shortage,
-    hasShortage: shortage > 0,
-  };
-};
+}
