@@ -51,13 +51,11 @@ export const Login: React.FC = () => {
       {/* Background Architectural Vector Composition */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
         <svg className="w-full h-full" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Subtle Grid */}
           <pattern id="bg-grid" width="40" height="40" patternUnits="userSpaceOnUse">
             <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" className="text-slate-300/40" strokeWidth="0.8" />
           </pattern>
           <rect width="100%" height="100%" fill="url(#bg-grid)" />
 
-          {/* Architectural Soft Light Polygons */}
           <polygon points="0,900 600,300 900,900" fill="url(#poly-grad-1)" opacity="0.15" />
           <polygon points="800,0 1440,500 1440,0" fill="url(#poly-grad-2)" opacity="0.1" />
 
@@ -74,79 +72,78 @@ export const Login: React.FC = () => {
         </svg>
       </div>
 
-      {/* Top Bar with Brand Header */}
-      <header className="relative z-10 w-full px-6 lg:px-12 py-5 flex items-center justify-between border-b border-slate-200/60 bg-white/40 backdrop-blur-sm">
+      {/* Top Bar Header */}
+      <header className="relative z-10 w-full px-4 sm:px-6 lg:px-12 py-4 sm:py-5 flex items-center justify-between border-b border-slate-200/60 bg-white/40 backdrop-blur-sm">
         <div className="flex items-center space-x-3">
-          <div className="bg-[#2563EB] p-2.5 rounded-2xl text-white shadow-md shadow-blue-500/20">
-            <Boxes className="h-5 w-5" />
+          <div className="bg-[#2563EB] p-2 sm:p-2.5 rounded-2xl text-white shadow-md shadow-blue-500/20">
+            <Boxes className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
-          <span className="font-extrabold text-base text-slate-900 tracking-tight">
+          <span className="font-extrabold text-sm sm:text-base text-slate-900 tracking-tight">
             Mini Operations ERP
           </span>
         </div>
       </header>
 
       {/* Main Two-Column Centered Layout Container */}
-      <main className="relative z-10 flex-1 max-w-6xl w-full mx-auto px-6 lg:px-12 py-10 flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-16">
+      <main className="relative z-10 flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-12 py-6 sm:py-10 flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-16">
         {/* LEFT COLUMN: Marketing & Branding Section */}
-        <div className="flex-1 space-y-8 text-left animate-fade-in-rise">
-          {/* Main Headline with Serif Typography for 'Minimal. Powerful. Built for Growth.' */}
-          <div className="space-y-4">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif text-slate-900 tracking-tight leading-[1.1]">
+        <div className="flex-1 space-y-6 sm:space-y-8 text-left animate-fade-in-rise w-full">
+          <div className="space-y-3 sm:space-y-4">
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-serif text-slate-900 tracking-tight leading-[1.15]">
               Minimal. <br />
               Powerful. <br />
               Built for <span className="text-[#2563EB] font-serif italic">Growth.</span>
             </h1>
-            <div className="w-16 h-1 bg-[#2563EB] rounded-full"></div>
-            <p className="text-slate-600 text-sm sm:text-base max-w-md leading-relaxed font-normal">
+            <div className="w-12 sm:w-16 h-1 bg-[#2563EB] rounded-full"></div>
+            <p className="text-slate-600 text-xs sm:text-base max-w-md leading-relaxed font-normal">
               Mini Operations ERP helps you manage inventory, production and orders effortlessly.
             </p>
           </div>
 
           {/* Three Feature Highlights Row */}
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-200/80 max-w-lg">
-            <div className="space-y-1">
-              <div className="flex items-center space-x-1.5 text-[#2563EB]">
-                <ShieldCheck className="h-4 w-4" />
-                <span className="text-xs font-bold text-slate-900">Secure</span>
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-3 sm:pt-4 border-t border-slate-200/80 max-w-lg">
+            <div className="space-y-0.5 sm:space-y-1">
+              <div className="flex items-center space-x-1 sm:space-x-1.5 text-[#2563EB]">
+                <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="text-[11px] sm:text-xs font-bold text-slate-900">Secure</span>
               </div>
-              <span className="text-[11px] text-slate-500 block leading-tight">Enterprise Grade</span>
+              <span className="text-[10px] sm:text-[11px] text-slate-500 block leading-tight">Enterprise Grade</span>
             </div>
 
-            <div className="space-y-1">
-              <div className="flex items-center space-x-1.5 text-[#2563EB]">
-                <BarChart2 className="h-4 w-4" />
-                <span className="text-xs font-bold text-slate-900">Reliable</span>
+            <div className="space-y-0.5 sm:space-y-1">
+              <div className="flex items-center space-x-1 sm:space-x-1.5 text-[#2563EB]">
+                <BarChart2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="text-[11px] sm:text-xs font-bold text-slate-900">Reliable</span>
               </div>
-              <span className="text-[11px] text-slate-500 block leading-tight">99.9% Uptime</span>
+              <span className="text-[10px] sm:text-[11px] text-slate-500 block leading-tight">99.9% Uptime</span>
             </div>
 
-            <div className="space-y-1">
-              <div className="flex items-center space-x-1.5 text-[#2563EB]">
-                <Zap className="h-4 w-4" />
-                <span className="text-xs font-bold text-slate-900">Efficient</span>
+            <div className="space-y-0.5 sm:space-y-1">
+              <div className="flex items-center space-x-1 sm:space-x-1.5 text-[#2563EB]">
+                <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="text-[11px] sm:text-xs font-bold text-slate-900">Efficient</span>
               </div>
-              <span className="text-[11px] text-slate-500 block leading-tight">Built for Scale</span>
+              <span className="text-[10px] sm:text-[11px] text-slate-500 block leading-tight">Built for Scale</span>
             </div>
           </div>
         </div>
 
         {/* RIGHT COLUMN: Minimalist Login Card */}
-        <div className="w-full max-w-md bg-white p-8 sm:p-10 rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] border border-slate-200/90 space-y-6 animate-modal-scale">
+        <div className="w-full max-w-md bg-white p-6 sm:p-10 rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] border border-slate-200/90 space-y-5 sm:space-y-6 animate-modal-scale">
           {/* Header */}
           <div className="text-center space-y-1">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome Back</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Welcome Back</h2>
             <p className="text-slate-500 text-xs font-normal">Sign in to continue to your account</p>
           </div>
 
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3.5 rounded-2xl text-center font-medium animate-fade-in-rise">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-2xl text-center font-medium animate-fade-in-rise">
               {error}
             </div>
           )}
 
           {/* Manual Sign In Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3.5 sm:space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Email Address
@@ -228,42 +225,42 @@ export const Login: React.FC = () => {
               <p className="text-[11px] text-slate-400">Explore the system with demo accounts</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => handleQuickLogin('ADMIN')}
                 disabled={isLoading}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 text-xs font-semibold transition-all hover:border-[#2563EB]/50 hover:scale-[1.02] active:scale-[0.98]"
+                className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 text-xs font-semibold transition-all hover:border-[#2563EB]/50 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Shield className="h-4 w-4 mb-1 text-[#2563EB]" />
                 <span className="font-bold">Admin</span>
-                <span className="text-[9px] text-slate-400 font-normal">Full Access</span>
+                <span className="text-[9px] text-slate-400 font-normal hidden sm:inline">Full Access</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickLogin('OPERATIONS')}
                 disabled={isLoading}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 text-xs font-semibold transition-all hover:border-[#2563EB]/50 hover:scale-[1.02] active:scale-[0.98]"
+                className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 text-xs font-semibold transition-all hover:border-[#2563EB]/50 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <UserCheck className="h-4 w-4 mb-1 text-[#2563EB]" />
-                <span className="font-bold">Operations</span>
-                <span className="text-[9px] text-slate-400 font-normal">Ops Access</span>
+                <span className="font-bold">Ops</span>
+                <span className="text-[9px] text-slate-400 font-normal hidden sm:inline">Ops Access</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickLogin('SALES')}
                 disabled={isLoading}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 text-xs font-semibold transition-all hover:border-[#2563EB]/50 hover:scale-[1.02] active:scale-[0.98]"
+                className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 text-xs font-semibold transition-all hover:border-[#2563EB]/50 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <ShoppingBag className="h-4 w-4 mb-1 text-[#2563EB]" />
                 <span className="font-bold">Sales</span>
-                <span className="text-[9px] text-slate-400 font-normal">Sales Access</span>
+                <span className="text-[9px] text-slate-400 font-normal hidden sm:inline">Sales Access</span>
               </button>
             </div>
           </div>
 
           {/* Security Footer Note */}
-          <div className="pt-2 text-center text-[11px] text-slate-400 flex items-center justify-center space-x-1">
+          <div className="pt-2 text-center text-[10px] sm:text-[11px] text-slate-400 flex items-center justify-center space-x-1">
             <ShieldCheck className="h-3.5 w-3.5 text-[#2563EB]" />
             <span>Your data is protected with enterprise-grade security.</span>
           </div>
@@ -271,7 +268,7 @@ export const Login: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 py-4 text-center text-xs text-slate-400 border-t border-slate-200/60 bg-white/40 backdrop-blur-sm">
+      <footer className="relative z-10 py-3 sm:py-4 text-center text-[11px] sm:text-xs text-slate-400 border-t border-slate-200/60 bg-white/40 backdrop-blur-sm">
         Mini Operations ERP Platform &copy; 2026 — Verified Core Engines
       </footer>
     </div>
