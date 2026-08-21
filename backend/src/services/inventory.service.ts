@@ -1,157 +1,114 @@
-import { prisma } from '../utils/prisma';
+import { z } from 'zod';
+import { InventoryRepository } from '../repositories/inventory.repository';
 import { AppError } from '../middleware/errorHandler';
-import crypto from 'crypto';
 
-export const getInventoryList = async (filters?: {
-  locationId?: string;
-  itemId?: string;
-  categoryId?: string;
-}) => {
-  const where: any = {};
-  if (filters?.locationId) where.locationId = filters.locationId;
-  if (filters?.itemId) where.itemId = filters.itemId;
-  if (filters?.categoryId) {
-    where.item = { categoryId: filters.categoryId };
+export const AdjustStockSchema = z.object({
+  inventoryId: z.string().min(1, 'Inventory ID is required'),
+  quantity: z
+    .number()
+    .int('Quantity must be a whole integer')
+    .refine((val) => val !== 0, { message: 'Quantity cannot be zero' }),
+  reason: z.string().min(1, 'Reason for adjustment is required'),
+  idempotencyKey: z.string().min(1, 'Idempotency key is required'),
+  simulatedErrorForAtomicityTest: z.boolean().optional(),
+});
+
+export type AdjustStockInput = z.infer<typeof AdjustStockSchema>;
+
+export class InventoryService {
+  private inventoryRepository: InventoryRepository;
+
+  constructor() {
+    this.inventoryRepository = new InventoryRepository();
   }
 
-  const inventories = await prisma.inventory.findMany({
-    where,
-    include: {
-      item: {
-        include: {
-          category: true,
-        },
-      },
-      location: true,
-      batch: true,
-    },
-    orderBy: { updatedAt: 'desc' },
-  });
+  async getInventoryList(filters?: {
+    locationId?: string;
+    itemId?: string;
+    batchId?: string;
+    categoryId?: string;
+  }) {
+    const inventories = await this.inventoryRepository.findAll(filters);
 
-  return inventories.map((inv) => ({
-    ...inv,
-    calculatedAvailable: inv.physicalQuantity - inv.reservedQuantity,
-  }));
-};
-
-export const getInventoryById = async (id: string) => {
-  const inventory = await prisma.inventory.findUnique({
-    where: { id },
-    include: {
-      item: { include: { category: true } },
-      location: true,
-      batch: true,
-    },
-  });
-
-  if (!inventory) {
-    throw new AppError('Inventory record not found', 404);
-  }
-
-  return {
-    ...inventory,
-    calculatedAvailable: inventory.physicalQuantity - inventory.reservedQuantity,
-  };
-};
-
-export const updateStockLevel = async (
-  itemId: string,
-  locationId: string,
-  batchId: string,
-  quantityChange: number,
-  reason: string,
-  idempotencyKeyInput?: string,
-  userId?: string
-) => {
-  const idempotencyKey = idempotencyKeyInput || `ADJUST-${crypto.randomUUID()}`;
-
-  return prisma.$transaction(async (tx) => {
-    const existingTx = await tx.inventoryTransaction.findUnique({
-      where: { idempotencyKey },
-    });
-    if (existingTx) {
-      return tx.inventory.findUnique({ where: { id: existingTx.inventoryId } });
-    }
-
-    let inventory = await tx.inventory.findFirst({
-      where: {
-        itemId,
-        locationId,
-        batchId,
-      },
-    });
-
-    if (!inventory) {
-      if (quantityChange < 0) {
-        throw new AppError('Cannot reduce inventory for non-existing record', 400);
+    return inventories.map((inv) => {
+      // Invariant assertion: availableQuantity = physicalQuantity - reservedQuantity
+      const calculatedAvailable = inv.physicalQuantity - inv.reservedQuantity;
+      if (inv.availableQuantity !== calculatedAvailable) {
+        console.warn(`[INVARIANT WARNING] Inventory ${inv.id} balance discrepancy detected.`);
       }
 
-      inventory = await tx.inventory.create({
-        data: {
-          itemId,
-          locationId,
-          batchId,
-          physicalQuantity: quantityChange,
-          reservedQuantity: 0,
-          availableQuantity: quantityChange,
-        },
-      });
-
-      await tx.inventoryTransaction.create({
-        data: {
-          inventoryId: inventory.id,
-          type: 'INITIAL_STOCK',
-          quantity: quantityChange,
-          idempotencyKey,
-          reason,
-          createdById: userId || null,
-        },
-      });
-
-      return inventory;
-    }
-
-    const newPhysical = inventory.physicalQuantity + quantityChange;
-    const newAvailable = newPhysical - inventory.reservedQuantity;
-
-    if (newPhysical < 0) {
-      throw new AppError('Operation rejected: Physical inventory cannot be negative', 400);
-    }
-
-    if (newAvailable < 0) {
-      throw new AppError('Operation rejected: Available inventory cannot drop below zero', 400);
-    }
-
-    const updated = await tx.inventory.update({
-      where: { id: inventory.id },
-      data: {
-        physicalQuantity: newPhysical,
-        availableQuantity: newAvailable,
-      },
+      return {
+        ...inv,
+        availableQuantity: calculatedAvailable,
+      };
     });
+  }
 
-    await tx.inventoryTransaction.create({
-      data: {
-        inventoryId: inventory.id,
-        type: quantityChange >= 0 ? 'STOCK_ADD' : 'STOCK_REDUCE',
-        quantity: quantityChange,
-        idempotencyKey,
-        reason,
-        createdById: userId || null,
+  async getInventoryById(id: string) {
+    const inventory = await this.inventoryRepository.findById(id);
+    if (!inventory) {
+      throw new AppError('Inventory record not found', 404);
+    }
+
+    const calculatedAvailable = inventory.physicalQuantity - inventory.reservedQuantity;
+    return {
+      ...inventory,
+      availableQuantity: calculatedAvailable,
+    };
+  }
+
+  async adjustPhysicalStock(input: AdjustStockInput, userId?: string) {
+    const parseResult = AdjustStockSchema.safeParse(input);
+    if (!parseResult.success) {
+      const issueMessage = parseResult.error.issues[0]?.message || 'Invalid stock adjustment input';
+      throw new AppError(`Validation Error: ${issueMessage}`, 400);
+    }
+
+    const { inventoryId, quantity, reason, idempotencyKey, simulatedErrorForAtomicityTest } = parseResult.data;
+
+    const result = await this.inventoryRepository.executeAtomicAdjustment(
+      inventoryId,
+      quantity,
+      idempotencyKey,
+      reason,
+      userId,
+      simulatedErrorForAtomicityTest
+    );
+
+    if (result.error === 'NOT_FOUND') {
+      throw new AppError('Inventory record not found', 404);
+    }
+
+    if (result.error === 'NEGATIVE_PHYSICAL') {
+      throw new AppError('Inventory adjustment would create negative physical stock', 400);
+    }
+
+    if (result.error === 'BELOW_RESERVED') {
+      throw new AppError('Inventory adjustment would reduce physical stock below reserved stock', 400);
+    }
+
+    if (result.error === 'CONCURRENCY_CONFLICT') {
+      throw new AppError('Inventory adjustment rejected due to concurrent balance conflict', 400);
+    }
+
+    if (result.isDuplicate) {
+      throw new AppError('Duplicate idempotency key: Operation already processed', 409);
+    }
+
+    const inv = result.inventory!;
+    const calculatedAvailable = inv.physicalQuantity - inv.reservedQuantity;
+
+    return {
+      inventory: {
+        ...inv,
+        availableQuantity: calculatedAvailable,
       },
-    });
+      transaction: result.transaction,
+    };
+  }
 
-    return updated;
-  });
-};
-
-export const getMasterData = async () => {
-  const [locations, categories, items, batches] = await Promise.all([
-    prisma.location.findMany(),
-    prisma.category.findMany(),
-    prisma.item.findMany({ include: { category: true } }),
-    prisma.batch.findMany({ include: { item: true } }),
-  ]);
-
-  return { locations, categories, items, batches };
-};
+  async getMasterData() {
+    const inventories = await this.inventoryRepository.findAll();
+    return inventories;
+  }
+}
