@@ -1,38 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
-import { StockTransfer, Location, Item } from '../types';
+import React, { useEffect, useState } from 'react';
+import api from '../services/api';
+import { StockTransfer } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeftRight, Plus, Truck, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
+import { StatusBadge } from '../components/StatusBadge';
+import { Modal } from '../components/Modal';
+import { ArrowLeftRight, Plus, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
 
 export const InternalTransfersPage: React.FC = () => {
-  const { user } = useAuth();
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const { user } = useAuth();
 
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Create Modal State
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [inventories, setInventories] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
+
   const [sourceLocationId, setSourceLocationId] = useState('');
   const [destinationLocationId, setDestinationLocationId] = useState('');
   const [itemId, setItemId] = useState('');
-  const [quantity, setQuantity] = useState<number>(0);
+  const [batchId, setBatchId] = useState('');
+  const [quantity, setQuantity] = useState(10);
+
+  const [createLoading, setCreateLoading] = useState(false);
   const [modalError, setModalError] = useState('');
 
   const fetchTransfers = async () => {
     setLoading(true);
+    setError('');
     try {
-      const [trRes, masterRes] = await Promise.all([
-        api.get('/transfers'),
-        api.get('/inventory/masters'),
-      ]);
-      setTransfers(trRes.data.data);
-      setLocations(masterRes.data.data.locations);
-      setItems(masterRes.data.data.items);
-    } catch (err) {
-      console.error(err);
+      const res = await api.get('/transfers');
+      setTransfers(res.data.data || []);
+    } catch (err: any) {
+      setError('Failed to fetch Stock Transfers');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMasterData = async () => {
+    try {
+      const invRes = await api.get('/inventory');
+      const invList: any[] = invRes.data.data || [];
+      setInventories(invList);
+
+      const locMap = new Map();
+      invList.forEach((inv) => {
+        if (inv.location) locMap.set(inv.location.id, inv.location);
+      });
+      setLocations(Array.from(locMap.values()));
+    } catch (err) {
+      console.error('Failed to load inventory for transfers', err);
     }
   };
 
@@ -40,21 +60,41 @@ export const InternalTransfersPage: React.FC = () => {
     fetchTransfers();
   }, []);
 
-  const handleCreateTransfer = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOpenCreate = () => {
+    fetchMasterData();
+    setIsCreateOpen(true);
     setModalError('');
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sourceLocationId || !destinationLocationId || !itemId || !batchId) {
+      setModalError('Please select source, destination, item, and batch');
+      return;
+    }
+    if (sourceLocationId === destinationLocationId) {
+      setModalError('Source and Destination locations must be different');
+      return;
+    }
+
+    setCreateLoading(true);
+    setModalError('');
+
     try {
       await api.post('/transfers', {
         sourceLocationId,
         destinationLocationId,
         itemId,
+        batchId,
         quantity,
       });
-      setIsModalOpen(false);
-      setQuantity(0);
+
+      setIsCreateOpen(false);
       fetchTransfers();
     } catch (err: any) {
-      setModalError(err.response?.data?.error || 'Failed to request transfer');
+      setModalError(err.response?.data?.error || 'Failed to request stock transfer');
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -63,7 +103,7 @@ export const InternalTransfersPage: React.FC = () => {
       await api.post(`/transfers/${transferId}/dispatch`);
       fetchTransfers();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Dispatch failed');
+      alert(err.response?.data?.error || 'Failed to dispatch transfer');
     }
   };
 
@@ -72,230 +112,274 @@ export const InternalTransfersPage: React.FC = () => {
       await api.post(`/transfers/${transferId}/receive`);
       fetchTransfers();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Receipt failed');
+      alert(err.response?.data?.error || 'Failed to receive transfer');
     }
   };
 
-  const canManage = user?.role === 'ADMIN' || user?.role === 'OPERATIONS';
+  const canMutate = user?.role === 'ADMIN' || user?.role === 'OPERATIONS';
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'REQUESTED':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'DISPATCHED':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'RECEIVED':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      default:
-        return 'bg-slate-50 text-slate-700 border-slate-200';
-    }
-  };
+  // Filter batches matching selected item and source location
+  const availableSourceInventory = inventories.filter(
+    (inv) => inv.locationId === sourceLocationId
+  );
+  const availableItems = Array.from(
+    new Map(availableSourceInventory.map((inv) => [inv.item.id, inv.item])).values()
+  );
+  const availableBatches = availableSourceInventory
+    .filter((inv) => inv.itemId === itemId)
+    .map((inv) => inv.batch);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex items-center space-x-3">
-          <div className="bg-amber-100 text-amber-600 p-2 rounded-xl">
-            <ArrowLeftRight className="h-6 w-6" />
+    <div className="space-y-6 animate-fade-in-rise">
+      <PageHeader
+        title="Internal Stock Transfers Engine"
+        description="Transfer stock across locations with multi-stage lifecycle & double-receipt protection."
+        icon={ArrowLeftRight}
+        actionButton={
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={fetchTransfers}
+              className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 transition"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            {canMutate && (
+              <button
+                onClick={handleOpenCreate}
+                className="flex items-center space-x-2 bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition active:scale-95"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Request Transfer</span>
+              </button>
+            )}
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Internal Stock Transfers</h1>
-            <p className="text-slate-500 text-sm">
-              Multi-location stock movements (Dispatch reduces source, Receive increases destination)
-            </p>
-          </div>
-        </div>
+        }
+      />
 
-        {canManage && (
-          <button
-            onClick={() => {
-              if (locations.length >= 2) {
-                setSourceLocationId(locations[0].id);
-                setDestinationLocationId(locations[1].id);
-              }
-              if (items.length > 0) setItemId(items[0].id);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl font-medium shadow-sm transition"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Request Transfer</span>
-          </button>
-        )}
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-4 rounded-2xl flex items-center space-x-2">
+          <AlertCircle className="h-4 w-4 text-rose-500" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Lifecycle Helper Banner */}
+      <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <span className="font-semibold text-sky-400">⚡ Transfer Lifecycle Workflow:</span>
+        <div className="flex items-center space-x-2 font-mono font-bold">
+          <span className="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-md border border-amber-500/30">REQUESTED</span>
+          <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
+          <span className="bg-sky-500/20 text-sky-300 px-2.5 py-1 rounded-md border border-sky-500/30">DISPATCHED (Deducts Source)</span>
+          <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
+          <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-md border border-emerald-500/30">RECEIVED (Adds Dest)</span>
+        </div>
       </div>
 
-      {/* Transfers Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
-              <th className="py-4 px-6">Transfer ID</th>
-              <th className="py-4 px-6">Source Location</th>
-              <th className="py-4 px-6">Destination Location</th>
-              <th className="py-4 px-6">Item</th>
-              <th className="py-4 px-6 text-right">Quantity</th>
-              <th className="py-4 px-6 text-center">Status</th>
-              <th className="py-4 px-6 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-sm">
-            {loading ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-400">Loading transfer records...</td>
-              </tr>
-            ) : transfers.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-400">No stock transfers recorded.</td>
-              </tr>
-            ) : (
-              transfers.map((tr) => (
-                <tr key={tr.id} className="hover:bg-slate-50/80 transition">
-                  <td className="py-4 px-6 font-mono text-xs font-bold text-amber-700">
-                    {tr.transferNumber}
-                  </td>
-                  <td className="py-4 px-6 text-slate-700 font-medium">{tr.sourceLocation?.name}</td>
-                  <td className="py-4 px-6 text-slate-700 font-medium">{tr.destinationLocation?.name}</td>
-                  <td className="py-4 px-6">
-                    <div className="font-semibold text-slate-900">{tr.item?.name}</div>
-                    <div className="text-xs text-slate-400 font-mono">{tr.item?.sku}</div>
-                  </td>
-                  <td className="py-4 px-6 text-right font-bold text-slate-800">
-                    {tr.quantity} <span className="text-xs font-normal text-slate-400">{tr.item?.unit}</span>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full border ${getStatusBadge(tr.status)}`}>
-                      {tr.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    {canManage && (
-                      <div className="flex items-center justify-end space-x-2">
+      {/* Transfers Table Container */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center space-y-3">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-3 border-sky-500 border-t-transparent"></div>
+            <p className="text-xs text-slate-500 font-medium">Loading stock transfer records...</p>
+          </div>
+        ) : transfers.length === 0 ? (
+          <div className="p-12 text-center space-y-3">
+            <ArrowLeftRight className="h-10 w-10 text-slate-300 mx-auto" />
+            <h4 className="text-sm font-bold text-slate-700">No Transfers Requested</h4>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              {canMutate ? 'Click "Request Transfer" above to initiate a stock transfer between locations.' : 'No stock transfers found.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3.5 px-5">Transfer #</th>
+                  <th className="py-3.5 px-4">Item & Batch</th>
+                  <th className="py-3.5 px-4">Source Location</th>
+                  <th className="py-3.5 px-4">Destination Location</th>
+                  <th className="py-3.5 px-4 text-right">Quantity</th>
+                  <th className="py-3.5 px-4 text-center">Status</th>
+                  {canMutate && <th className="py-3.5 px-5 text-center">Action</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {transfers.map((tr) => (
+                  <tr key={tr.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="py-4 px-5 font-mono font-bold text-slate-900">
+                      {tr.transferNumber}
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="font-bold text-slate-900">{tr.item?.name || 'N/A'}</div>
+                      <div className="text-[11px] font-mono text-slate-500">Batch: {tr.batch?.batchNumber || 'N/A'}</div>
+                    </td>
+                    <td className="py-4 px-4 font-medium text-slate-700">
+                      {tr.sourceLocation?.name}
+                    </td>
+                    <td className="py-4 px-4 font-medium text-slate-700">
+                      {tr.destinationLocation?.name}
+                    </td>
+                    <td className="py-4 px-4 text-right font-mono font-bold text-slate-900">
+                      {tr.quantity}
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      <StatusBadge status={tr.status} />
+                    </td>
+                    {canMutate && (
+                      <td className="py-4 px-5 text-center">
                         {tr.status === 'REQUESTED' && (
                           <button
                             onClick={() => handleDispatch(tr.id)}
-                            className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium shadow-sm transition"
+                            className="bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition active:scale-95"
                           >
-                            <Truck className="h-3.5 w-3.5" />
-                            <span>Dispatch</span>
+                            Dispatch Stock
                           </button>
                         )}
-
                         {tr.status === 'DISPATCHED' && (
                           <button
                             onClick={() => handleReceive(tr.id)}
-                            className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium shadow-sm transition"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition active:scale-95"
                           >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>Receive Stock</span>
+                            Receive Stock
                           </button>
                         )}
-
                         {tr.status === 'RECEIVED' && (
-                          <span className="text-xs text-slate-400 flex items-center space-x-1 font-mono">
-                            <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                            <span>Completed</span>
-                          </span>
+                          <span className="text-[11px] text-slate-400 font-medium">Completed</span>
                         )}
-                      </div>
+                      </td>
                     )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Modal for Requesting Transfer */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">Request Stock Transfer</h3>
+      {/* Request Transfer Modal */}
+      {isCreateOpen && (
+        <Modal
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          title="Request Internal Stock Transfer"
+          subtitle="Move item quantity from source location to destination location."
+        >
+          {modalError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl">
+              {modalError}
+            </div>
+          )}
 
-            {modalError && (
-              <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg border border-red-200">
-                {modalError}
-              </div>
-            )}
+          <form onSubmit={handleCreateSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Source Location</label>
+              <select
+                required
+                value={sourceLocationId}
+                onChange={(e) => {
+                  setSourceLocationId(e.target.value);
+                  setItemId('');
+                  setBatchId('');
+                }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                <option value="">Select Source Location</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name} ({loc.code})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <form onSubmit={handleCreateTransfer} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Source Location (From)</label>
-                <select
-                  value={sourceLocationId}
-                  onChange={(e) => setSourceLocationId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                >
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name} ({loc.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Destination Location</label>
+              <select
+                required
+                value={destinationLocationId}
+                onChange={(e) => setDestinationLocationId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                <option value="">Select Destination Location</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name} ({loc.code})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Destination Location (To)</label>
-                <select
-                  value={destinationLocationId}
-                  onChange={(e) => setDestinationLocationId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                >
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name} ({loc.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Item to Transfer</label>
+              <select
+                required
+                disabled={!sourceLocationId}
+                value={itemId}
+                onChange={(e) => {
+                  setItemId(e.target.value);
+                  setBatchId('');
+                }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50"
+              >
+                <option value="">Select Item</option>
+                {availableItems.map((item: any) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} ({item.sku})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Item to Transfer</label>
-                <select
-                  value={itemId}
-                  onChange={(e) => setItemId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                >
-                  {items.map((it) => (
-                    <option key={it.id} value={it.id}>
-                      {it.name} ({it.sku})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Source Batch Number</label>
+              <select
+                required
+                disabled={!itemId}
+                value={batchId}
+                onChange={(e) => setBatchId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50"
+              >
+                <option value="">Select Batch</option>
+                {availableBatches.map((batch: any) => (
+                  <option key={batch.id} value={batch.id}>
+                    {batch.batchNumber}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Transfer Quantity</label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                  placeholder="e.g. 50"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Transfer Quantity</label>
+              <input
+                type="number"
+                min="1"
+                required
+                value={quantity}
+                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
 
-              <div className="flex justify-end space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium"
-                >
-                  Submit Transfer Request
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsCreateOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={createLoading}
+                className="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition active:scale-95 disabled:opacity-50"
+              >
+                {createLoading ? 'Submitting...' : 'Submit Transfer Request'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

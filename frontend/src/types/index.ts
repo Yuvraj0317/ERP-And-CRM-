@@ -48,6 +48,8 @@ export interface InventoryItem {
   batch: Batch;
 }
 
+export type Inventory = InventoryItem;
+
 export type WorkOrderStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
 
 export interface WorkOrder {

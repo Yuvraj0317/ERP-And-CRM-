@@ -1,38 +1,60 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
-import { CustomerOrder, Location, Item } from '../types';
+import React, { useEffect, useState } from 'react';
+import api from '../services/api';
+import { CustomerOrder } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingCart, Plus, ShieldCheck, XCircle, UserCheck } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
+import { StatusBadge } from '../components/StatusBadge';
+import { Modal } from '../components/Modal';
+import { ShoppingCart, Plus, RefreshCw, AlertCircle, XCircle } from 'lucide-react';
 
 export const CustomerOrdersPage: React.FC = () => {
-  const { user } = useAuth();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const { user } = useAuth();
 
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Create Modal State
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [locations, setLocations] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+
   const [customerName, setCustomerName] = useState('');
   const [locationId, setLocationId] = useState('');
   const [itemId, setItemId] = useState('');
-  const [quantity, setQuantity] = useState<number>(0);
+  const [quantity, setQuantity] = useState(10);
+
+  const [createLoading, setCreateLoading] = useState(false);
   const [modalError, setModalError] = useState('');
 
   const fetchCustomerOrders = async () => {
     setLoading(true);
+    setError('');
     try {
-      const [ordRes, masterRes] = await Promise.all([
-        api.get('/customer-orders'),
-        api.get('/inventory/masters'),
-      ]);
-      setOrders(ordRes.data.data);
-      setLocations(masterRes.data.data.locations);
-      setItems(masterRes.data.data.items);
-    } catch (err) {
-      console.error(err);
+      const res = await api.get('/customer-orders');
+      setOrders(res.data.data || []);
+    } catch (err: any) {
+      setError('Failed to fetch Customer Orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMasterData = async () => {
+    try {
+      const invRes = await api.get('/inventory');
+      const invList: any[] = invRes.data.data || [];
+
+      const locMap = new Map();
+      const itemMap = new Map();
+      invList.forEach((inv) => {
+        if (inv.location) locMap.set(inv.location.id, inv.location);
+        if (inv.item) itemMap.set(inv.item.id, inv.item);
+      });
+
+      setLocations(Array.from(locMap.values()));
+      setItems(Array.from(itemMap.values()));
+    } catch (err) {
+      console.error('Failed to load master data for Customer Orders', err);
     }
   };
 
@@ -40,9 +62,22 @@ export const CustomerOrdersPage: React.FC = () => {
     fetchCustomerOrders();
   }, []);
 
-  const handleCreateOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOpenCreate = () => {
+    fetchMasterData();
+    setIsCreateOpen(true);
     setModalError('');
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerName.trim() || !locationId || !itemId) {
+      setModalError('Please enter customer name, location, and item');
+      return;
+    }
+
+    setCreateLoading(true);
+    setModalError('');
+
     try {
       await api.post('/customer-orders', {
         customerName,
@@ -50,218 +85,228 @@ export const CustomerOrdersPage: React.FC = () => {
         itemId,
         quantity,
       });
-      setIsModalOpen(false);
-      setCustomerName('');
-      setQuantity(0);
+
+      setIsCreateOpen(false);
       fetchCustomerOrders();
     } catch (err: any) {
-      setModalError(err.response?.data?.error || 'Failed to create order and reserve stock');
+      setModalError(err.response?.data?.error || 'Failed to reserve stock for customer order');
+    } finally {
+      setCreateLoading(false);
     }
   };
 
   const handleCancelOrder = async (orderId: string) => {
-    if (!window.confirm('Are you sure you want to cancel this order and release reserved stock?')) return;
+    if (!window.confirm('Are you sure you want to cancel this order and release the reserved stock back to available?')) {
+      return;
+    }
+
     try {
       await api.post(`/customer-orders/${orderId}/cancel`);
       fetchCustomerOrders();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Order cancellation failed');
+      alert(err.response?.data?.error || 'Failed to cancel customer order');
     }
   };
 
-  const canCreateOrder = user?.role === 'ADMIN' || user?.role === 'SALES';
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'RESERVED':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'CANCELLED':
-        return 'bg-red-50 text-red-700 border-red-200';
-      case 'COMPLETED':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      default:
-        return 'bg-slate-50 text-slate-700 border-slate-200';
-    }
-  };
+  const canCreateAndCancel = user?.role === 'ADMIN' || user?.role === 'SALES';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex items-center space-x-3">
-          <div className="bg-emerald-100 text-emerald-600 p-2 rounded-xl">
-            <ShoppingCart className="h-6 w-6" />
+    <div className="space-y-6 animate-fade-in-rise">
+      <PageHeader
+        title="Customer Orders & Atomic Stock Reservation"
+        description="Concurrency-safe stock reservation engine with atomic stock release on order cancellation."
+        icon={ShoppingCart}
+        actionButton={
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={fetchCustomerOrders}
+              className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 transition"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            {canCreateAndCancel && (
+              <button
+                onClick={handleOpenCreate}
+                className="flex items-center space-x-2 bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition active:scale-95"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Create Order & Reserve</span>
+              </button>
+            )}
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Customer Orders & Stock Reservation</h1>
-            <p className="text-slate-500 text-sm">
-              Atomic transaction-level stock reservation (Prevents parallel over-reservation)
+        }
+      />
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-4 rounded-2xl flex items-center space-x-2">
+          <AlertCircle className="h-4 w-4 text-rose-500" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Customer Orders Table Container */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center space-y-3">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-3 border-sky-500 border-t-transparent"></div>
+            <p className="text-xs text-slate-500 font-medium">Fetching customer stock reservations...</p>
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="p-12 text-center space-y-3">
+            <ShoppingCart className="h-10 w-10 text-slate-300 mx-auto" />
+            <h4 className="text-sm font-bold text-slate-700">No Customer Orders Placed</h4>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              {canCreateAndCancel ? 'Click "Create Order & Reserve" above to place an order and reserve stock.' : 'No customer orders found.'}
             </p>
           </div>
-        </div>
-
-        {canCreateOrder && (
-          <button
-            onClick={() => {
-              if (locations.length > 0) setLocationId(locations[0].id);
-              if (items.length > 0) setItemId(items[0].id);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium shadow-sm transition"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Create Order & Reserve Stock</span>
-          </button>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3.5 px-5">Order #</th>
+                  <th className="py-3.5 px-4">Customer Name</th>
+                  <th className="py-3.5 px-4">Item & Location</th>
+                  <th className="py-3.5 px-4 text-right">Reserved Quantity</th>
+                  <th className="py-3.5 px-4 text-center">Status</th>
+                  {canCreateAndCancel && <th className="py-3.5 px-5 text-center">Action</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {orders.map((ord) => (
+                  <tr key={ord.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="py-4 px-5 font-mono font-bold text-slate-900">
+                      {ord.orderNumber}
+                    </td>
+                    <td className="py-4 px-4 font-semibold text-slate-900">
+                      {ord.customerName}
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="font-bold text-slate-900">{ord.item?.name || 'N/A'}</div>
+                      <div className="text-[11px] text-slate-500">{ord.location?.name || 'N/A'}</div>
+                    </td>
+                    <td className="py-4 px-4 text-right font-mono font-bold text-amber-600">
+                      {ord.quantity} units
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      <StatusBadge status={ord.status} />
+                    </td>
+                    {canCreateAndCancel && (
+                      <td className="py-4 px-5 text-center">
+                        {ord.status === 'RESERVED' && (
+                          <button
+                            onClick={() => handleCancelOrder(ord.id)}
+                            className="inline-flex items-center space-x-1 bg-rose-50 hover:bg-rose-100 text-rose-700 px-3 py-1.5 rounded-lg text-xs font-semibold border border-rose-200 transition active:scale-95"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            <span>Cancel & Release</span>
+                          </button>
+                        )}
+                        {ord.status === 'CANCELLED' && (
+                          <span className="text-[11px] text-slate-400 font-medium">Released</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Orders Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
-              <th className="py-4 px-6">Order ID</th>
-              <th className="py-4 px-6">Customer Name</th>
-              <th className="py-4 px-6">Fulfillment Location</th>
-              <th className="py-4 px-6">Item</th>
-              <th className="py-4 px-6 text-right">Reserved Qty</th>
-              <th className="py-4 px-6 text-center">Status</th>
-              <th className="py-4 px-6 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-sm">
-            {loading ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-400">Loading order records...</td>
-              </tr>
-            ) : orders.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-400">No customer orders created yet.</td>
-              </tr>
-            ) : (
-              orders.map((ord) => (
-                <tr key={ord.id} className="hover:bg-slate-50/80 transition">
-                  <td className="py-4 px-6 font-mono text-xs font-bold text-emerald-700">
-                    {ord.orderNumber}
-                  </td>
-                  <td className="py-4 px-6 font-semibold text-slate-900">{ord.customerName}</td>
-                  <td className="py-4 px-6 text-slate-700 font-medium">{ord.location?.name}</td>
-                  <td className="py-4 px-6">
-                    <div className="font-semibold text-slate-900">{ord.item?.name}</div>
-                    <div className="text-xs text-slate-400 font-mono">{ord.item?.sku}</div>
-                  </td>
-                  <td className="py-4 px-6 text-right font-bold text-emerald-600">
-                    {ord.quantity} <span className="text-xs font-normal text-slate-400">{ord.item?.unit}</span>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full border ${getStatusBadge(ord.status)}`}>
-                      {ord.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    {canCreateOrder && ord.status === 'RESERVED' && (
-                      <button
-                        onClick={() => handleCancelOrder(ord.id)}
-                        className="inline-flex items-center space-x-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs px-3 py-1.5 rounded-lg border border-red-200 transition font-medium"
-                      >
-                        <XCircle className="h-3.5 w-3.5" />
-                        <span>Cancel & Release</span>
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Create Customer Order Modal */}
+      {isCreateOpen && (
+        <Modal
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          title="Create Customer Order & Reserve Stock"
+          subtitle="Atomically reserve inventory quantity for a customer order."
+        >
+          {modalError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl">
+              {modalError}
+            </div>
+          )}
 
-      {/* Modal for Sales User Creating Order */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">Create Order & Reserve Stock</h3>
+          <form onSubmit={handleCreateSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Customer Name</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Acme Industries, Global Corp..."
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
 
-            {modalError && (
-              <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg border border-red-200">
-                {modalError}
-              </div>
-            )}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Fulfillment Location</label>
+              <select
+                required
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                <option value="">Select Location</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name} ({loc.code})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <form onSubmit={handleCreateOrder} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Customer Name</label>
-                <input
-                  type="text"
-                  required
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="e.g. Acme Industrial Ltd"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Ordered Item</label>
+              <select
+                required
+                value={itemId}
+                onChange={(e) => setItemId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                <option value="">Select Item</option>
+                {items.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} ({item.sku})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Fulfillment Location</label>
-                <select
-                  value={locationId}
-                  onChange={(e) => setLocationId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                >
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name} ({loc.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Reservation Quantity</label>
+              <input
+                type="number"
+                min="1"
+                required
+                value={quantity}
+                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Item Required</label>
-                <select
-                  value={itemId}
-                  onChange={(e) => setItemId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                >
-                  {items.map((it) => (
-                    <option key={it.id} value={it.id}>
-                      {it.name} ({it.sku})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Quantity to Reserve</label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                  placeholder="e.g. 60"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium"
-                >
-                  Reserve Stock & Save Order
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsCreateOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={createLoading}
+                className="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition active:scale-95 disabled:opacity-50"
+              >
+                {createLoading ? 'Reserving...' : 'Place Order & Reserve Stock'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );
