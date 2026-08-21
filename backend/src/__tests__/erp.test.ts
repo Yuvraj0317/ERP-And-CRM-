@@ -166,4 +166,53 @@ describe('Mini Operations ERP Mandatory Business Logic Tests', () => {
     expect(res.body.error).toContain('Forbidden');
   });
 
+  // Concurrency Test: Available = 100, User A reserves 80, User B reserves 50 -> Only one reservation succeeds!
+  it('Concurrency Test: Parallel race condition reservation handling', async () => {
+    // 1. Create a fresh location & inventory item with 100 available stock
+    const locC = await prisma.location.create({ data: { name: 'Concurrency Test Location', code: 'LOC-CONC' } });
+    const invConc = await prisma.inventory.create({
+      data: {
+        itemId,
+        locationId: locC.id,
+        physicalQuantity: 100,
+        reservedQuantity: 0,
+        availableQuantity: 100,
+      },
+    });
+
+    // 2. Dispatch two simultaneous reservation requests: User A (80 units) & User B (50 units)
+    const reqA = request(app)
+      .post('/api/customer-orders')
+      .set('Authorization', `Bearer ${salesToken}`)
+      .send({
+        customerName: 'User A Corp',
+        locationId: locC.id,
+        itemId: itemId,
+        quantity: 80,
+      });
+
+    const reqB = request(app)
+      .post('/api/customer-orders')
+      .set('Authorization', `Bearer ${salesToken}`)
+      .send({
+        customerName: 'User B Inc',
+        locationId: locC.id,
+        itemId: itemId,
+        quantity: 50,
+      });
+
+    const [resA, resB] = await Promise.all([reqA, reqB]);
+
+    const statuses = [resA.status, resB.status];
+    
+    // Exactly one request must succeed (201) and one must fail due to insufficient available stock (400)
+    expect(statuses).toContain(201);
+    expect(statuses).toContain(400);
+
+    // Verify DB state: Reserved quantity cannot exceed physical quantity!
+    const finalInv = await prisma.inventory.findUnique({ where: { id: invConc.id } });
+    expect(finalInv!.reservedQuantity).toBeLessThanOrEqual(100);
+    expect(finalInv!.availableQuantity).toBeGreaterThanOrEqual(0);
+  });
+
 });
