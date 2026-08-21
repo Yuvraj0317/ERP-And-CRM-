@@ -104,7 +104,7 @@ export const InventoryPage: React.FC = () => {
           <button
             onClick={fetchInventory}
             disabled={loading}
-            className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 transition active:scale-95"
+            className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 transition active:scale-95 shadow-sm"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh Stock</span>
@@ -113,32 +113,32 @@ export const InventoryPage: React.FC = () => {
       />
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-4 rounded-2xl flex items-center space-x-2">
+        <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs p-4 rounded-2xl flex items-center space-x-2">
           <AlertCircle className="h-4 w-4 text-rose-500" />
           <span>{error}</span>
         </div>
       )}
 
       {/* Controls & Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors duration-300">
         <div className="flex-1 flex flex-col sm:flex-row items-center gap-3">
           <div className="relative w-full sm:w-72">
-            <SlidersHorizontal className="h-4 w-4 absolute left-3.5 top-3 text-slate-400" />
+            <SlidersHorizontal className="h-4 w-4 absolute left-3.5 top-3 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Search SKU, item name, batch..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
 
           <div className="flex items-center space-x-2 w-full sm:w-auto">
-            <Filter className="h-4 w-4 text-slate-400" />
+            <Filter className="h-4 w-4 text-slate-400 dark:text-slate-500" />
             <select
               value={selectedLocation}
               onChange={(e) => setSelectedLocation(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+              className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
             >
               <option value="">All Locations</option>
               {locations.map((loc) => (
@@ -150,23 +150,23 @@ export const InventoryPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="text-xs text-slate-500 font-medium text-right">
-          Showing <span className="font-bold text-slate-900">{filteredInventories.length}</span> of {inventories.length} records
+        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium text-right">
+          Showing <span className="font-bold text-slate-900 dark:text-white">{filteredInventories.length}</span> of {inventories.length} records
         </div>
       </div>
 
       {/* Inventory Table Container */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden transition-colors duration-300">
         {loading ? (
           <div className="p-12 text-center space-y-3">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-3 border-sky-500 border-t-transparent"></div>
-            <p className="text-xs text-slate-500 font-medium">Fetching real-time inventory balance...</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Fetching real-time inventory balance...</p>
           </div>
         ) : filteredInventories.length === 0 ? (
           <div className="p-12 text-center space-y-3">
-            <Layers className="h-10 w-10 text-slate-300 mx-auto" />
-            <h4 className="text-sm font-bold text-slate-700">No Inventory Records Found</h4>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            <Layers className="h-10 w-10 text-slate-300 dark:text-slate-600 mx-auto" />
+            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200">No Inventory Records Found</h4>
+            <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
               No inventory entries match your filter criteria or initial seed.
             </p>
           </div>
@@ -174,7 +174,7 @@ export const InventoryPage: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <tr className="bg-slate-50/80 dark:bg-slate-950/80 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   <th className="py-3.5 px-5">Item & SKU</th>
                   <th className="py-3.5 px-4">Location</th>
                   <th className="py-3.5 px-4">Batch Number</th>
@@ -184,34 +184,34 @@ export const InventoryPage: React.FC = () => {
                   {canAdjust && <th className="py-3.5 px-5 text-center">Action</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs">
                 {filteredInventories.map((inv) => {
                   const available = inv.physicalQuantity - inv.reservedQuantity;
                   return (
-                    <tr key={inv.id} className="hover:bg-slate-50/60 transition-colors">
+                    <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="py-4 px-5">
-                        <div className="font-bold text-slate-900">{inv.item?.name || 'N/A'}</div>
-                        <div className="text-[11px] font-mono text-slate-500">SKU: {inv.item?.sku || 'N/A'}</div>
+                        <div className="font-bold text-slate-900 dark:text-white">{inv.item?.name || 'N/A'}</div>
+                        <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">SKU: {inv.item?.sku || 'N/A'}</div>
                       </td>
-                      <td className="py-4 px-4 font-medium text-slate-700">
+                      <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-300">
                         {inv.location?.name || 'N/A'}
                         <span className="block text-[10px] text-slate-400 font-mono">{inv.location?.code}</span>
                       </td>
-                      <td className="py-4 px-4 font-mono text-slate-600">
+                      <td className="py-4 px-4 font-mono text-slate-600 dark:text-slate-400">
                         {inv.batch?.batchNumber || 'N/A'}
                       </td>
-                      <td className="py-4 px-4 text-right font-semibold text-slate-800">
+                      <td className="py-4 px-4 text-right font-semibold text-slate-800 dark:text-slate-200">
                         {inv.physicalQuantity}
                       </td>
-                      <td className="py-4 px-4 text-right font-medium text-amber-600">
+                      <td className="py-4 px-4 text-right font-medium text-amber-600 dark:text-amber-400">
                         {inv.reservedQuantity}
                       </td>
                       <td className="py-4 px-5 text-right">
                         <span
                           className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold font-mono border ${
                             available > 0
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                              ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30'
+                              : 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/30'
                           }`}
                         >
                           {available}
@@ -227,7 +227,7 @@ export const InventoryPage: React.FC = () => {
                               setModalError('');
                               setModalSuccess('');
                             }}
-                            className="bg-sky-50 hover:bg-sky-100 text-sky-700 px-3 py-1.5 rounded-lg text-xs font-semibold border border-sky-200/80 transition active:scale-95"
+                            className="bg-sky-50 hover:bg-sky-100 dark:bg-sky-500/10 dark:hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 px-3 py-1.5 rounded-lg text-xs font-semibold border border-sky-200/80 dark:border-sky-500/30 transition active:scale-95"
                           >
                             Adjust Stock
                           </button>
@@ -251,43 +251,43 @@ export const InventoryPage: React.FC = () => {
           subtitle={`Item: ${selectedInv.item?.name} (${selectedInv.location?.name})`}
         >
           {modalError && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3.5 rounded-xl font-medium">
+            <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs p-3.5 rounded-xl font-medium">
               {modalError}
             </div>
           )}
           {modalSuccess && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs p-3.5 rounded-xl font-medium">
+            <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs p-3.5 rounded-xl font-medium">
               {modalSuccess}
             </div>
           )}
 
           <form onSubmit={handleAdjustSubmit} className="space-y-4">
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1 text-xs">
+            <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1 text-xs">
               <div className="flex justify-between">
-                <span className="text-slate-500">Current Physical Stock:</span>
-                <span className="font-bold text-slate-900">{selectedInv.physicalQuantity}</span>
+                <span className="text-slate-500 dark:text-slate-400">Current Physical Stock:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedInv.physicalQuantity}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Reserved Stock:</span>
-                <span className="font-bold text-amber-600">{selectedInv.reservedQuantity}</span>
+                <span className="text-slate-500 dark:text-slate-400">Reserved Stock:</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">{selectedInv.reservedQuantity}</span>
               </div>
-              <div className="flex justify-between border-t border-slate-200 pt-1">
-                <span className="text-slate-700 font-semibold">Current Available Stock:</span>
-                <span className="font-bold text-emerald-700">
+              <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-1">
+                <span className="text-slate-700 dark:text-slate-300 font-semibold">Current Available Stock:</span>
+                <span className="font-bold text-emerald-700 dark:text-emerald-400">
                   {selectedInv.physicalQuantity - selectedInv.reservedQuantity}
                 </span>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Quantity Change (+ to Add, - to Deduct)
               </label>
               <div className="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={() => setAdjustQty((prev) => (typeof prev === 'number' ? prev - 5 : -5))}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2.5 rounded-xl border border-slate-200 transition active:scale-95"
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 transition active:scale-95"
                 >
                   <MinusCircle className="h-4 w-4" />
                 </button>
@@ -299,12 +299,12 @@ export const InventoryPage: React.FC = () => {
                     const val = parseInt(e.target.value, 10);
                     setAdjustQty(isNaN(val) ? '' : val);
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-center text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-center text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 transition"
                 />
                 <button
                   type="button"
                   onClick={() => setAdjustQty((prev) => (typeof prev === 'number' ? prev + 5 : 5))}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2.5 rounded-xl border border-slate-200 transition active:scale-95"
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 transition active:scale-95"
                 >
                   <PlusCircle className="h-4 w-4" />
                 </button>
@@ -312,7 +312,7 @@ export const InventoryPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Reason for Stock Adjustment
               </label>
               <input
@@ -321,15 +321,15 @@ export const InventoryPage: React.FC = () => {
                 placeholder="e.g. Audit correction, physical damage..."
                 value={adjustReason}
                 onChange={(e) => setAdjustReason(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 transition"
               />
             </div>
 
-            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setSelectedInv(null)}
-                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-xl transition"
               >
                 Cancel
               </button>

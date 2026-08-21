@@ -80,7 +80,6 @@ export const InternalTransfersPage: React.FC = () => {
     }
   };
 
-  // Map all project items from inventories
   const allProjectItemsMap = new Map<string, { id: string; name: string; sku: string }>();
   inventories.forEach((inv) => {
     if (inv.item) {
@@ -93,7 +92,6 @@ export const InternalTransfersPage: React.FC = () => {
   });
   const allProjectItems = Array.from(allProjectItemsMap.values());
 
-  // Map all project batches from inventories
   const allProjectBatchesMap = new Map<string, { id: string; batchNumber: string; itemId: string; locationId: string; itemName?: string; availableQuantity: number }>();
   inventories.forEach((inv) => {
     if (inv.batch) {
@@ -110,7 +108,6 @@ export const InternalTransfersPage: React.FC = () => {
   });
   const allProjectBatches = Array.from(allProjectBatchesMap.values());
 
-  // Filter items matching selected Source Location
   const availableSourceInventory = inventories.filter(
     (inv) => inv.locationId === sourceLocationId
   );
@@ -128,7 +125,6 @@ export const InternalTransfersPage: React.FC = () => {
     ).values()
   );
 
-  // Filter batches matching selected Item (and Source Location if selected)
   const filteredBatches = inventories
     .filter((inv) => {
       const matchSource = !sourceLocationId || inv.locationId === sourceLocationId;
@@ -172,7 +168,7 @@ export const InternalTransfersPage: React.FC = () => {
     label: `Batch: ${b.batchNumber} (${b.itemName || 'Item'}) — Available: ${b.availableQuantity} units`,
   }));
 
-  const handleSourceLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleSourceLocationChange = (e: any) => {
     const selectedSourceLoc = e.target.value;
     setSourceLocationId(selectedSourceLoc);
     setItemId('');
@@ -183,12 +179,11 @@ export const InternalTransfersPage: React.FC = () => {
     setModalError('');
   };
 
-  const handleItemChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleItemChange = (e: any) => {
     const selectedItemId = e.target.value;
     setItemId(selectedItemId);
     setBatchId('');
 
-    // If source location is not set yet, auto-select source location of first inventory match
     if (!sourceLocationId && selectedItemId) {
       const match = inventories.find((inv) => inv.itemId === selectedItemId);
       if (match && match.locationId) {
@@ -198,11 +193,10 @@ export const InternalTransfersPage: React.FC = () => {
     setModalError('');
   };
 
-  const handleBatchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleBatchChange = (e: any) => {
     const selectedBatchId = e.target.value;
     setBatchId(selectedBatchId);
 
-    // Auto-select Item and Source Location matching selected Batch if not set
     const match = inventories.find((inv) => inv.batchId === selectedBatchId);
     if (match) {
       if (!itemId) setItemId(match.itemId);
@@ -298,7 +292,7 @@ export const InternalTransfersPage: React.FC = () => {
                 fetchTransfers();
                 fetchMasterData();
               }}
-              className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 transition"
+              className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 transition"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
@@ -317,14 +311,14 @@ export const InternalTransfersPage: React.FC = () => {
       />
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-4 rounded-2xl flex items-center space-x-2">
+        <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs p-4 rounded-2xl flex items-center space-x-2">
           <AlertCircle className="h-4 w-4 text-rose-500" />
           <span>{error}</span>
         </div>
       )}
 
       {/* Lifecycle Banner */}
-      <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+      <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-sm">
         <span className="font-semibold text-sky-400">⚡ Transfer Lifecycle Workflow:</span>
         <div className="flex items-center space-x-2 font-mono font-bold">
           <span className="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-md border border-amber-500/30">REQUESTED</span>
@@ -336,17 +330,17 @@ export const InternalTransfersPage: React.FC = () => {
       </div>
 
       {/* Transfers Table Container */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden transition-colors duration-300">
         {loading ? (
           <div className="p-12 text-center space-y-3">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-3 border-sky-500 border-t-transparent"></div>
-            <p className="text-xs text-slate-500 font-medium">Loading stock transfer records...</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Loading stock transfer records...</p>
           </div>
         ) : transfers.length === 0 ? (
           <div className="p-12 text-center space-y-3">
-            <ArrowLeftRight className="h-10 w-10 text-slate-300 mx-auto" />
-            <h4 className="text-sm font-bold text-slate-700">No Transfers Requested</h4>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            <ArrowLeftRight className="h-10 w-10 text-slate-300 dark:text-slate-600 mx-auto" />
+            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200">No Transfers Requested</h4>
+            <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
               {canMutate ? 'Click "Request Transfer" above to initiate a stock transfer between locations.' : 'No stock transfers found.'}
             </p>
           </div>
@@ -354,7 +348,7 @@ export const InternalTransfersPage: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <tr className="bg-slate-50/80 dark:bg-slate-950/80 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   <th className="py-3.5 px-5">Transfer #</th>
                   <th className="py-3.5 px-4">Item & Batch</th>
                   <th className="py-3.5 px-4">Source Location</th>
@@ -364,23 +358,23 @@ export const InternalTransfersPage: React.FC = () => {
                   {canMutate && <th className="py-3.5 px-5 text-center">Action</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs">
                 {transfers.map((tr) => (
-                  <tr key={tr.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-4 px-5 font-mono font-bold text-slate-900">
+                  <tr key={tr.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="py-4 px-5 font-mono font-bold text-slate-900 dark:text-white">
                       {tr.transferNumber}
                     </td>
                     <td className="py-4 px-4">
-                      <div className="font-bold text-slate-900">{tr.item?.name || 'N/A'}</div>
-                      <div className="text-[11px] font-mono text-slate-500">Batch: {tr.batch?.batchNumber || 'N/A'}</div>
+                      <div className="font-bold text-slate-900 dark:text-white">{tr.item?.name || 'N/A'}</div>
+                      <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">Batch: {tr.batch?.batchNumber || 'N/A'}</div>
                     </td>
-                    <td className="py-4 px-4 font-medium text-slate-700">
+                    <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-300">
                       {tr.sourceLocation?.name}
                     </td>
-                    <td className="py-4 px-4 font-medium text-slate-700">
+                    <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-300">
                       {tr.destinationLocation?.name}
                     </td>
-                    <td className="py-4 px-4 text-right font-mono font-bold text-slate-900">
+                    <td className="py-4 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
                       {tr.quantity}
                     </td>
                     <td className="py-4 px-4 text-center">
@@ -405,7 +399,7 @@ export const InternalTransfersPage: React.FC = () => {
                           </button>
                         )}
                         {tr.status === 'RECEIVED' && (
-                          <span className="text-[11px] text-slate-400 font-medium">Completed</span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Completed</span>
                         )}
                       </td>
                     )}
@@ -426,7 +420,7 @@ export const InternalTransfersPage: React.FC = () => {
           subtitle="Move item quantity from source location to destination location."
         >
           {modalError && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3.5 rounded-xl font-medium">
+            <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs p-3.5 rounded-xl font-medium">
               {modalError}
             </div>
           )}
@@ -434,7 +428,7 @@ export const InternalTransfersPage: React.FC = () => {
           {masterLoading ? (
             <div className="p-8 text-center space-y-2">
               <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-sky-500 border-t-transparent"></div>
-              <p className="text-xs text-slate-500">Loading locations & inventory...</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Loading locations & inventory...</p>
             </div>
           ) : (
             <form onSubmit={handleCreateSubmit} className="space-y-4">
@@ -471,7 +465,7 @@ export const InternalTransfersPage: React.FC = () => {
               />
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Transfer Quantity
                 </label>
                 <input
@@ -484,15 +478,15 @@ export const InternalTransfersPage: React.FC = () => {
                     const val = parseInt(e.target.value, 10);
                     setQuantity(isNaN(val) ? '' : val);
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 transition"
                 />
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
                 >
                   Cancel
                 </button>

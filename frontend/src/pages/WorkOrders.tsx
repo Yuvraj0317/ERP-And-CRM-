@@ -166,7 +166,7 @@ export const WorkOrdersPage: React.FC = () => {
                 fetchWorkOrders();
                 fetchMasterData();
               }}
-              className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 transition"
+              className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 transition"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
@@ -185,7 +185,7 @@ export const WorkOrdersPage: React.FC = () => {
       />
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-4 rounded-2xl flex items-center space-x-2">
+        <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs p-4 rounded-2xl flex items-center space-x-2">
           <AlertTriangle className="h-4 w-4 text-rose-500" />
           <span>{error}</span>
         </div>
@@ -193,15 +193,15 @@ export const WorkOrdersPage: React.FC = () => {
 
       {/* Work Orders Grid */}
       {loading ? (
-        <div className="bg-white p-12 text-center rounded-2xl border border-slate-200/80 space-y-3">
+        <div className="bg-white dark:bg-slate-900 p-12 text-center rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-3 border-sky-500 border-t-transparent"></div>
-          <p className="text-xs text-slate-500 font-medium">Computing dynamic material shortages...</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Computing dynamic material shortages...</p>
         </div>
       ) : workOrders.length === 0 ? (
-        <div className="bg-white p-12 text-center rounded-2xl border border-slate-200/80 space-y-3">
-          <ClipboardList className="h-10 w-10 text-slate-300 mx-auto" />
-          <h4 className="text-sm font-bold text-slate-700">No Work Orders Created</h4>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+        <div className="bg-white dark:bg-slate-900 p-12 text-center rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+          <ClipboardList className="h-10 w-10 text-slate-300 dark:text-slate-600 mx-auto" />
+          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200">No Work Orders Created</h4>
+          <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
             {canCreateWO ? 'Click "Create Work Order" above to schedule a new production requirement.' : 'No active work orders found.'}
           </p>
         </div>
@@ -212,50 +212,50 @@ export const WorkOrdersPage: React.FC = () => {
             return (
               <div
                 key={wo.id}
-                className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 space-y-4 flex flex-col justify-between"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-200 space-y-4 flex flex-col justify-between"
               >
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <span className="font-mono font-bold text-slate-900 text-sm">{wo.workOrderNumber}</span>
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">{wo.workOrderNumber}</span>
                     <StatusBadge status={wo.status} />
                   </div>
 
                   <div className="space-y-2 text-xs">
-                    <div className="flex items-center space-x-2 text-slate-600">
+                    <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
                       <Package className="h-3.5 w-3.5 text-sky-500" />
-                      <span className="font-semibold text-slate-900">{wo.item?.name || 'N/A'}</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{wo.item?.name || 'N/A'}</span>
                     </div>
 
-                    <div className="flex items-center space-x-2 text-slate-500">
-                      <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                    <div className="flex items-center space-x-2 text-slate-500 dark:text-slate-400">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                       <span>{wo.location?.name || 'N/A'}</span>
                     </div>
 
-                    <div className="flex items-center space-x-2 text-slate-500">
-                      <UserCheck className="h-3.5 w-3.5 text-slate-400" />
+                    <div className="flex items-center space-x-2 text-slate-500 dark:text-slate-400">
+                      <UserCheck className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                       <span>Assigned: {wo.assignedUser?.name || 'N/A'}</span>
                     </div>
                   </div>
 
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 text-xs">
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
                     <div className="flex justify-between font-medium">
-                      <span className="text-slate-500">Required Quantity:</span>
-                      <span className="font-bold text-slate-900 font-mono">{wo.requiredQuantity}</span>
+                      <span className="text-slate-500 dark:text-slate-400">Required Quantity:</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">{wo.requiredQuantity}</span>
                     </div>
                     <div className="flex justify-between font-medium">
-                      <span className="text-slate-500">Available at Location:</span>
-                      <span className="font-bold text-slate-900 font-mono">{wo.currentAvailableQuantity}</span>
+                      <span className="text-slate-500 dark:text-slate-400">Available at Location:</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">{wo.currentAvailableQuantity}</span>
                     </div>
 
-                    <div className="border-t border-slate-200 pt-1.5 flex justify-between items-center">
-                      <span className="text-slate-600 font-semibold">Shortage Status:</span>
+                    <div className="border-t border-slate-200 dark:border-slate-800 pt-1.5 flex justify-between items-center">
+                      <span className="text-slate-600 dark:text-slate-300 font-semibold">Shortage Status:</span>
                       {hasShortage ? (
-                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30">
                           <AlertTriangle className="h-3 w-3 mr-1" />
                           Shortage: {wo.shortage}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">
                           <CheckCircle className="h-3 w-3 mr-1" />
                           Stock Ready
                         </span>
@@ -265,12 +265,12 @@ export const WorkOrdersPage: React.FC = () => {
                 </div>
 
                 {canUpdateStatus && wo.status !== 'COMPLETED' && (
-                  <div className="pt-2 border-t border-slate-100 flex items-center space-x-2">
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center space-x-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Transition:</span>
                     {wo.status === 'ASSIGNED' && (
                       <button
                         onClick={() => handleStatusChange(wo.id, 'IN_PROGRESS')}
-                        className="w-full bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold py-1.5 rounded-lg border border-sky-200 transition"
+                        className="w-full bg-sky-50 dark:bg-sky-500/10 hover:bg-sky-100 dark:hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 text-xs font-semibold py-1.5 rounded-lg border border-sky-200 dark:border-sky-500/30 transition"
                       >
                         Start (IN_PROGRESS)
                       </button>
@@ -278,7 +278,7 @@ export const WorkOrdersPage: React.FC = () => {
                     {wo.status === 'IN_PROGRESS' && (
                       <button
                         onClick={() => handleStatusChange(wo.id, 'COMPLETED')}
-                        className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold py-1.5 rounded-lg border border-emerald-200 transition"
+                        className="w-full bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-semibold py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/30 transition"
                       >
                         Complete (COMPLETED)
                       </button>
@@ -300,7 +300,7 @@ export const WorkOrdersPage: React.FC = () => {
           subtitle="Define production quantity requirement at specified location."
         >
           {modalError && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3.5 rounded-xl font-medium">
+            <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs p-3.5 rounded-xl font-medium">
               {modalError}
             </div>
           )}
@@ -308,7 +308,7 @@ export const WorkOrdersPage: React.FC = () => {
           {masterLoading ? (
             <div className="p-8 text-center space-y-2">
               <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-sky-500 border-t-transparent"></div>
-              <p className="text-xs text-slate-500">Loading master data...</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Loading master data...</p>
             </div>
           ) : (
             <form onSubmit={handleCreateSubmit} className="space-y-4">
@@ -329,7 +329,7 @@ export const WorkOrdersPage: React.FC = () => {
               />
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Required Quantity
                 </label>
                 <input
@@ -342,7 +342,7 @@ export const WorkOrdersPage: React.FC = () => {
                     const val = parseInt(e.target.value, 10);
                     setRequiredQuantity(isNaN(val) ? '' : val);
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 transition"
                 />
               </div>
 
@@ -354,11 +354,11 @@ export const WorkOrdersPage: React.FC = () => {
                 options={userOptions}
               />
 
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
                 >
                   Cancel
                 </button>
