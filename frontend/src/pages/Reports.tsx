@@ -3,6 +3,8 @@ import api from '../services/api';
 import { InventoryItem, WorkOrder, StockTransfer, CustomerOrder } from '../types';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
+import { ExportDropdown } from '../components/ExportDropdown';
+import { ExportColumn } from '../utils/exportUtils';
 import {
   FileText,
   Boxes,
@@ -10,8 +12,6 @@ import {
   ArrowLeftRight,
   ShoppingCart,
   Printer,
-  Download,
-  Filter,
   CheckCircle,
   AlertTriangle,
 } from 'lucide-react';
@@ -51,39 +51,92 @@ export const ReportsPage: React.FC = () => {
     window.print();
   };
 
-  const handleExportCSV = () => {
-    let csvContent = 'data:text/csv;charset=utf-8,';
+  // Compute active report columns and export data
+  const getActiveReportConfig = () => {
     if (activeTab === 'inventory') {
-      csvContent += 'Item,SKU,Location,Batch,Physical,Reserved,Available\n';
-      inventories.forEach((inv) => {
-        const avail = inv.physicalQuantity - inv.reservedQuantity;
-        csvContent += `"${inv.item?.name}","${inv.item?.sku}","${inv.location?.name}","${inv.batch?.batchNumber}",${inv.physicalQuantity},${inv.reservedQuantity},${avail}\n`;
-      });
+      const columns: ExportColumn[] = [
+        { header: 'Item Name', key: 'name', width: 22 },
+        { header: 'SKU', key: 'sku', width: 14 },
+        { header: 'Location', key: 'location', width: 18 },
+        { header: 'Batch Number', key: 'batch', width: 16 },
+        { header: 'Physical Stock', key: 'physical', width: 14 },
+        { header: 'Reserved Stock', key: 'reserved', width: 14 },
+        { header: 'Available Stock', key: 'available', width: 14 },
+      ];
+      const data = inventories.map((inv) => ({
+        name: inv.item?.name || '',
+        sku: inv.item?.sku || '',
+        location: inv.location?.name || '',
+        batch: inv.batch?.batchNumber || '',
+        physical: inv.physicalQuantity,
+        reserved: inv.reservedQuantity,
+        available: inv.physicalQuantity - inv.reservedQuantity,
+      }));
+      return { title: 'Inventory Valuation Report', columns, data, filenamePrefix: 'erp-inventory-report' };
     } else if (activeTab === 'work-orders') {
-      csvContent += 'WO Number,Item,Location,Assigned User,Required Qty,Available Qty,Shortage,Status\n';
-      workOrders.forEach((wo) => {
-        csvContent += `"${wo.workOrderNumber}","${wo.item?.name}","${wo.location?.name}","${wo.assignedUser?.name}",${wo.requiredQuantity},${wo.currentAvailableQuantity},${wo.shortage},"${wo.status}"\n`;
-      });
+      const columns: ExportColumn[] = [
+        { header: 'WO Number', key: 'number', width: 18 },
+        { header: 'Item Required', key: 'item', width: 22 },
+        { header: 'Location', key: 'location', width: 18 },
+        { header: 'Assigned Operator', key: 'user', width: 20 },
+        { header: 'Required Qty', key: 'required', width: 14 },
+        { header: 'Available Qty', key: 'available', width: 14 },
+        { header: 'Shortage Qty', key: 'shortage', width: 14 },
+        { header: 'Status', key: 'status', width: 14 },
+      ];
+      const data = workOrders.map((wo) => ({
+        number: wo.workOrderNumber,
+        item: wo.item?.name || '',
+        location: wo.location?.name || '',
+        user: wo.assignedUser?.name || '',
+        required: wo.requiredQuantity,
+        available: wo.currentAvailableQuantity,
+        shortage: wo.shortage,
+        status: wo.status,
+      }));
+      return { title: 'Work Order Shortages Report', columns, data, filenamePrefix: 'erp-work-orders-report' };
     } else if (activeTab === 'transfers') {
-      csvContent += 'Transfer Number,Item,Batch,Source,Destination,Quantity,Status\n';
-      transfers.forEach((tr) => {
-        csvContent += `"${tr.transferNumber}","${tr.item?.name}","${tr.batch?.batchNumber}","${tr.sourceLocation?.name}","${tr.destinationLocation?.name}",${tr.quantity},"${tr.status}"\n`;
-      });
+      const columns: ExportColumn[] = [
+        { header: 'Transfer Number', key: 'number', width: 18 },
+        { header: 'Item Name', key: 'item', width: 22 },
+        { header: 'Batch Number', key: 'batch', width: 16 },
+        { header: 'Source Facility', key: 'source', width: 20 },
+        { header: 'Destination Facility', key: 'destination', width: 20 },
+        { header: 'Quantity', key: 'quantity', width: 14 },
+        { header: 'Lifecycle Status', key: 'status', width: 14 },
+      ];
+      const data = transfers.map((tr) => ({
+        number: tr.transferNumber,
+        item: tr.item?.name || '',
+        batch: tr.batch?.batchNumber || '',
+        source: tr.sourceLocation?.name || '',
+        destination: tr.destinationLocation?.name || '',
+        quantity: tr.quantity,
+        status: tr.status,
+      }));
+      return { title: 'Internal Transfers Audit Report', columns, data, filenamePrefix: 'erp-transfers-report' };
     } else {
-      csvContent += 'Order Number,Customer Name,Item,Location,Reserved Qty,Status\n';
-      orders.forEach((ord) => {
-        csvContent += `"${ord.orderNumber}","${ord.customerName}","${ord.item?.name}","${ord.location?.name}",${ord.quantity},"${ord.status}"\n`;
-      });
+      const columns: ExportColumn[] = [
+        { header: 'Order Number', key: 'number', width: 18 },
+        { header: 'Customer Name', key: 'customer', width: 22 },
+        { header: 'Item Name', key: 'item', width: 22 },
+        { header: 'Location', key: 'location', width: 18 },
+        { header: 'Reserved Qty', key: 'quantity', width: 14 },
+        { header: 'Reservation Status', key: 'status', width: 16 },
+      ];
+      const data = orders.map((ord) => ({
+        number: ord.orderNumber,
+        customer: ord.customerName,
+        item: ord.item?.name || '',
+        location: ord.location?.name || '',
+        quantity: ord.quantity,
+        status: ord.status,
+      }));
+      return { title: 'Customer Stock Reservations Report', columns, data, filenamePrefix: 'erp-customer-orders-report' };
     }
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `ERP_${activeTab.toUpperCase()}_REPORT_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
+
+  const currentReport = getActiveReportConfig();
 
   return (
     <div className="space-y-6 animate-fade-in-rise">
@@ -93,13 +146,14 @@ export const ReportsPage: React.FC = () => {
         icon={FileText}
         actionButton={
           <div className="flex items-center space-x-2.5">
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center space-x-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
-            >
-              <Download className="h-3.5 w-3.5 text-[#2563EB]" />
-              <span>Export CSV</span>
-            </button>
+            <ExportDropdown
+              title={currentReport.title}
+              subtitle="Official Mini Operations ERP Audit Report"
+              filenamePrefix={currentReport.filenamePrefix}
+              columns={currentReport.columns}
+              currentViewData={currentReport.data}
+            />
+
             <button
               onClick={handlePrint}
               className="flex items-center space-x-2 bg-[#2563EB] hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition active:scale-95"

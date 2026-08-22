@@ -3,13 +3,14 @@ import api from '../services/api';
 import { InventoryItem, CustomerOrder, StockTransfer } from '../types';
 import { PageHeader } from '../components/PageHeader';
 import { StatCard } from '../components/StatCard';
+import { ExportDropdown } from '../components/ExportDropdown';
+import { ExportColumn } from '../utils/exportUtils';
 import {
   PieChart,
   ShoppingBag,
   ArrowLeftRight,
   SlidersHorizontal,
   CheckCircle2,
-  TrendingUp,
   Calendar,
 } from 'lucide-react';
 
@@ -45,20 +46,44 @@ export const AnalyticsPage: React.FC = () => {
   const inventoryAccuracy = '98.6%';
 
   const topItems = inventories.slice(0, 5).map((inv, idx) => ({
+    rank: idx + 1,
     name: inv.item?.name || `ERP Item ${idx + 1}`,
-    units: `${(inv.physicalQuantity || 500) * (5 - idx)} units`,
+    units: (inv.physicalQuantity || 500) * (5 - idx),
   }));
+
+  const analyticsExportColumns: ExportColumn[] = [
+    { header: 'Metric', key: 'metric', width: 25 },
+    { header: 'Value', key: 'value', width: 15 },
+    { header: 'Growth Rate', key: 'growth', width: 25 },
+  ];
+
+  const analyticsExportData = [
+    { metric: 'Total Orders', value: totalOrders, growth: '8.2% vs previous period' },
+    { metric: 'Total Transfers', value: totalTransfers, growth: '5.6% vs previous period' },
+    { metric: 'Stock Adjustments', value: totalStockAdjustments, growth: '12.1% vs previous period' },
+    { metric: 'Inventory Accuracy', value: inventoryAccuracy, growth: '2.4% vs previous period' },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in-rise">
       <PageHeader
         title="Analytics"
-        description="Insights and performance overview"
+        description="Insights and operational performance overview"
         icon={PieChart}
         actionButton={
-          <div className="flex items-center space-x-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-sm">
-            <Calendar className="h-3.5 w-3.5 text-[#2563EB]" />
-            <span>May 1 - May 31</span>
+          <div className="flex items-center space-x-2.5">
+            <div className="flex items-center space-x-2 bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 shadow-sm">
+              <Calendar className="h-3.5 w-3.5 text-[#2563EB]" />
+              <span>May 1 - May 31</span>
+            </div>
+
+            <ExportDropdown
+              title="Mini Operations ERP — Executive Analytics Summary"
+              subtitle="Order trends, transfer totals, adjustment volume, and stock accuracy"
+              filenamePrefix="mini-operations-erp-analytics"
+              columns={analyticsExportColumns}
+              currentViewData={analyticsExportData}
+            />
           </div>
         }
       />
@@ -98,42 +123,64 @@ export const AnalyticsPage: React.FC = () => {
       {/* Analytics Charts & Top Items Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2-Cols: Stock Movement SVG Line Chart */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+        <div
+          id="analytics-stock-movement-container"
+          className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6"
+        >
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Stock Movement</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">In Stock vs Out Stock operational movement</p>
+              <h3 className="text-base font-bold text-slate-900 tracking-tight">Stock Movement</h3>
+              <p className="text-xs text-slate-500">In Stock vs Out Stock operational movement</p>
             </div>
-            <div className="flex items-center space-x-4 text-xs font-semibold">
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB]"></span>
-                <span className="text-slate-600 dark:text-slate-300">In Stock</span>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4 text-xs font-semibold">
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB]"></span>
+                  <span className="text-slate-600">In Stock</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8]"></span>
+                  <span className="text-slate-600">Out Stock</span>
+                </div>
               </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8]"></span>
-                <span className="text-slate-600 dark:text-slate-300">Out Stock</span>
-              </div>
+
+              <ExportDropdown
+                title="Stock Movement Chart Analysis"
+                subtitle="Weekly In-Stock vs Out-Stock trends"
+                filenamePrefix="mini-operations-erp-stock-movement-chart"
+                columns={[
+                  { header: 'Date Period', key: 'period' },
+                  { header: 'In Stock Index', key: 'inStock' },
+                  { header: 'Out Stock Index', key: 'outStock' },
+                ]}
+                currentViewData={[
+                  { period: 'May 1', inStock: 120, outStock: 60 },
+                  { period: 'May 8', inStock: 160, outStock: 80 },
+                  { period: 'May 15', inStock: 110, outStock: 50 },
+                  { period: 'May 22', inStock: 170, outStock: 90 },
+                  { period: 'May 29', inStock: 190, outStock: 110 },
+                ]}
+                chartElementIdRef="analytics-stock-movement-container"
+                variant="chart"
+              />
             </div>
           </div>
 
           {/* SVG Movement Chart */}
           <div className="h-64 w-full relative pt-4">
             <svg className="w-full h-full overflow-visible" viewBox="0 0 600 200" preserveAspectRatio="none">
-              {/* Horizontal Grid lines */}
-              <line x1="0" y1="0" x2="600" y2="0" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
-              <line x1="0" y1="50" x2="600" y2="50" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" strokeDasharray="4 4" />
-              <line x1="0" y1="100" x2="600" y2="100" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" strokeDasharray="4 4" />
-              <line x1="0" y1="150" x2="600" y2="150" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" strokeDasharray="4 4" />
-              <line x1="0" y1="200" x2="600" y2="200" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
+              <line x1="0" y1="0" x2="600" y2="0" stroke="#F1F5F9" strokeWidth="1" />
+              <line x1="0" y1="50" x2="600" y2="50" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
+              <line x1="0" y1="100" x2="600" y2="100" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
+              <line x1="0" y1="150" x2="600" y2="150" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
+              <line x1="0" y1="200" x2="600" y2="200" stroke="#F1F5F9" strokeWidth="1" />
 
-              {/* In Stock Line Path */}
               <path
                 d="M 0 120 Q 150 80, 300 130 T 600 70"
                 fill="none"
                 stroke="#2563EB"
                 strokeWidth="3"
               />
-              {/* Out Stock Line Path */}
               <path
                 d="M 0 160 Q 150 140, 300 170 T 600 120"
                 fill="none"
@@ -153,22 +200,43 @@ export const AnalyticsPage: React.FC = () => {
         </div>
 
         {/* Right 1-Col: Top Items by Movement */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Top Items by Movement</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Highest volume operational items</p>
-          </div>
-
-          <div className="space-y-4">
-            {topItems.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between text-xs">
-                <div className="flex items-center space-x-3">
-                  <span className="font-mono font-bold text-[#2563EB] text-sm">{idx + 1}.</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">{item.name}</span>
-                </div>
-                <span className="font-mono text-slate-500 dark:text-slate-400">{item.units}</span>
+        <div
+          id="analytics-top-items-container"
+          className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5 flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">Top Items by Movement</h3>
+                <p className="text-xs text-slate-500">Highest volume operational items</p>
               </div>
-            ))}
+
+              <ExportDropdown
+                title="Top Items by Operational Movement"
+                subtitle="Highest volume inventory items"
+                filenamePrefix="mini-operations-erp-top-items"
+                columns={[
+                  { header: 'Rank', key: 'rank' },
+                  { header: 'Item Name', key: 'name' },
+                  { header: 'Movement Volume (Units)', key: 'units' },
+                ]}
+                currentViewData={topItems}
+                chartElementIdRef="analytics-top-items-container"
+                variant="chart"
+              />
+            </div>
+
+            <div className="space-y-4">
+              {topItems.map((item) => (
+                <div key={item.rank} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-3">
+                    <span className="font-mono font-bold text-[#2563EB] text-sm">{item.rank}.</span>
+                    <span className="font-semibold text-slate-900">{item.name}</span>
+                  </div>
+                  <span className="font-mono text-slate-500">{item.units.toLocaleString()} units</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

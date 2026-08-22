@@ -4,6 +4,8 @@ import api from '../services/api';
 import { InventoryItem, WorkOrder, StockTransfer, CustomerOrder } from '../types';
 import { PageHeader } from '../components/PageHeader';
 import { StatCard } from '../components/StatCard';
+import { ExportDropdown } from '../components/ExportDropdown';
+import { ExportColumn } from '../utils/exportUtils';
 import {
   LayoutDashboard,
   Boxes,
@@ -16,7 +18,6 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Clock,
-  Layers,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -61,7 +62,24 @@ export const DashboardPage: React.FC = () => {
   const locationsCount = new Set(inventories.map((i) => i.locationId).filter(Boolean)).size || 8;
   const inProgressWorkOrders = workOrders.filter((wo) => wo.status === 'IN_PROGRESS').length || 32;
   const pendingTransfers = transfers.filter((tr) => tr.status === 'REQUESTED').length || 8;
-  const reservedOrders = orders.filter((ord) => ord.status === 'RESERVED').length || 45;
+
+  // Columns definition for Dashboard Summary Export
+  const dashboardExportColumns: ExportColumn[] = [
+    { header: 'Metric / Indicator', key: 'metric', width: 25 },
+    { header: 'Current Value', key: 'value', width: 18 },
+    { header: 'Details / Subtitle', key: 'details', width: 30 },
+  ];
+
+  const dashboardExportData = [
+    { metric: 'Total Inventory Items', value: inventories.length || 1248, details: '12.5% growth from last month' },
+    { metric: 'Work Orders', value: workOrders.length || 76, details: `${inProgressWorkOrders} in progress` },
+    { metric: 'Internal Transfers', value: transfers.length || 24, details: `${pendingTransfers} pending dispatch` },
+    { metric: 'Customer Orders', value: orders.length || 48, details: '95% reserved' },
+    { metric: 'Active Locations', value: locationsCount, details: 'Operating warehouse facilities' },
+    { metric: 'Total Physical Stock', value: totalPhysicalStock, details: 'Physical count in warehouses' },
+    { metric: 'Total Reserved Stock', value: totalReservedStock, details: 'Allocated to customer orders' },
+    { metric: 'Total Available Stock', value: totalAvailableStock, details: 'Available for immediate allocation' },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in-rise">
@@ -70,19 +88,29 @@ export const DashboardPage: React.FC = () => {
         description="Overview of your operations"
         icon={LayoutDashboard}
         actionButton={
-          <button
-            onClick={fetchDashboardData}
-            disabled={loading}
-            className="flex items-center space-x-2 bg-white dark:bg-slate-900 hover:bg-slate-50 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 text-[#2563EB] ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
+          <div className="flex items-center space-x-2.5">
+            <button
+              onClick={fetchDashboardData}
+              disabled={loading}
+              className="flex items-center space-x-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 text-[#2563EB] ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+
+            <ExportDropdown
+              title="Mini Operations ERP — Executive Dashboard Summary"
+              subtitle="Key operational performance indicators, stock metrics, and activity totals"
+              filenamePrefix="mini-operations-erp-dashboard"
+              columns={dashboardExportColumns}
+              currentViewData={dashboardExportData}
+            />
+          </div>
         }
       />
 
       {error && (
-        <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs p-4 rounded-2xl flex items-center space-x-2">
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-4 rounded-2xl flex items-center space-x-2">
           <AlertTriangle className="h-4 w-4 text-rose-500" />
           <span>{error}</span>
         </div>
@@ -131,29 +159,52 @@ export const DashboardPage: React.FC = () => {
       {/* Middle Row: Inventory Overview SVG Line Chart & Stock Availability Donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2-Cols: Inventory Overview SVG Chart */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+        <div
+          id="dashboard-line-chart-container"
+          className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5"
+        >
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Inventory Overview</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Stock levels across all locations.</p>
+              <h3 className="text-base font-bold text-slate-900 tracking-tight">Inventory Overview</h3>
+              <p className="text-xs text-slate-500">Stock levels across all locations.</p>
             </div>
-            <button
-              onClick={() => navigate('/inventory')}
-              className="text-xs font-bold text-[#2563EB] hover:underline flex items-center gap-1"
-            >
-              View Inventory <ArrowUpRight className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => navigate('/inventory')}
+                className="text-xs font-bold text-[#2563EB] hover:underline flex items-center gap-1"
+              >
+                View Inventory <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+
+              <ExportDropdown
+                title="Inventory Overview Chart — Stock Movement Trend"
+                subtitle="Historical stock levels over weekly intervals"
+                filenamePrefix="mini-operations-erp-stock-movement"
+                columns={[
+                  { header: 'Period', key: 'period' },
+                  { header: 'Stock Index', key: 'index' },
+                ]}
+                currentViewData={[
+                  { period: 'May 1', index: 100 },
+                  { period: 'May 8', index: 120 },
+                  { period: 'May 15', index: 110 },
+                  { period: 'May 22', index: 140 },
+                  { period: 'May 29', index: 160 },
+                ]}
+                chartElementIdRef="dashboard-line-chart-container"
+                variant="chart"
+              />
+            </div>
           </div>
 
           <div className="h-56 w-full relative pt-4">
             <svg className="w-full h-full overflow-visible" viewBox="0 0 600 180" preserveAspectRatio="none">
-              <line x1="0" y1="0" x2="600" y2="0" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
-              <line x1="0" y1="45" x2="600" y2="45" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" strokeDasharray="4 4" />
-              <line x1="0" y1="90" x2="600" y2="90" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" strokeDasharray="4 4" />
-              <line x1="0" y1="135" x2="600" y2="135" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" strokeDasharray="4 4" />
-              <line x1="0" y1="180" x2="600" y2="180" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
+              <line x1="0" y1="0" x2="600" y2="0" stroke="#F1F5F9" strokeWidth="1" />
+              <line x1="0" y1="45" x2="600" y2="45" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
+              <line x1="0" y1="90" x2="600" y2="90" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
+              <line x1="0" y1="135" x2="600" y2="135" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
+              <line x1="0" y1="180" x2="600" y2="180" stroke="#F1F5F9" strokeWidth="1" />
 
-              {/* Blue smooth line path */}
               <path
                 d="M 0 50 Q 100 90, 200 60 T 400 100 T 600 130"
                 fill="none"
@@ -177,41 +228,61 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Right 1-Col: Stock Availability Circular Donut Chart */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5 flex flex-col justify-between">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Stock Availability</h3>
+        <div
+          id="dashboard-donut-chart-container"
+          className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5 flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">Stock Availability</h3>
+            <ExportDropdown
+              title="Stock Availability Visualization"
+              subtitle="Breakdown of physical, reserved, and unavailable inventory"
+              filenamePrefix="mini-operations-erp-stock-availability"
+              columns={[
+                { header: 'Category', key: 'category' },
+                { header: 'Percentage', key: 'percentage' },
+                { header: 'Quantity (Units)', key: 'quantity' },
+              ]}
+              currentViewData={[
+                { category: 'Available Stock', percentage: '75%', quantity: totalAvailableStock },
+                { category: 'Reserved Stock', percentage: '20%', quantity: totalReservedStock },
+                { category: 'Unavailable / Damaged', percentage: '5%', quantity: 150 },
+              ]}
+              chartElementIdRef="dashboard-donut-chart-container"
+              variant="chart"
+            />
           </div>
 
           <div className="flex flex-col items-center justify-center py-2 relative">
-            <div className="w-36 h-36 rounded-full border-[14px] border-[#2563EB] border-t-[#38BDF8] border-r-slate-200 dark:border-r-slate-800 flex items-center justify-center relative">
+            <div className="w-36 h-36 rounded-full border-[14px] border-[#2563EB] border-t-[#38BDF8] border-r-slate-200 flex items-center justify-center relative">
               <div className="text-center">
-                <span className="text-2xl font-black text-slate-900 dark:text-white block font-mono">75%</span>
+                <span className="text-2xl font-black text-slate-900 block font-mono">75%</span>
                 <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Available</span>
               </div>
             </div>
           </div>
 
-          <div className="space-y-2 text-xs font-semibold pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="space-y-2 text-xs font-semibold pt-2 border-t border-slate-100">
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB]"></span>
-                <span className="text-slate-700 dark:text-slate-300">Available</span>
+                <span className="text-slate-700">Available</span>
               </div>
-              <span className="font-mono text-slate-900 dark:text-white font-bold">75% (2,450)</span>
+              <span className="font-mono text-slate-900 font-bold">75% (2,450)</span>
             </div>
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8]"></span>
-                <span className="text-slate-700 dark:text-slate-300">Reserved</span>
+                <span className="text-slate-700">Reserved</span>
               </div>
-              <span className="font-mono text-slate-900 dark:text-white font-bold">20% (610)</span>
+              <span className="font-mono text-slate-900 font-bold">20% (610)</span>
             </div>
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-                <span className="text-slate-700 dark:text-slate-300">Unavailable</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                <span className="text-slate-700">Unavailable</span>
               </div>
-              <span className="font-mono text-slate-900 dark:text-white font-bold">5% (150)</span>
+              <span className="font-mono text-slate-900 font-bold">5% (150)</span>
             </div>
           </div>
         </div>
@@ -220,38 +291,38 @@ export const DashboardPage: React.FC = () => {
       {/* Bottom Row: Recent Activity Feed & Low Stock Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity Feed */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Recent Activity</h3>
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">Recent Activity</h3>
             <Clock className="h-4 w-4 text-slate-400" />
           </div>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 dark:border-slate-800/60">
+            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50">
               <div className="flex items-center space-x-2.5">
                 <ArrowLeftRight className="h-4 w-4 text-[#2563EB]" />
-                <span className="text-slate-800 dark:text-slate-200 font-semibold">Transfer TR-2026-389 received</span>
+                <span className="text-slate-800 font-semibold">Transfer TR-2026-389 received</span>
               </div>
               <span className="text-slate-400 font-mono text-[11px]">2m ago</span>
             </div>
-            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 dark:border-slate-800/60">
+            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50">
               <div className="flex items-center space-x-2.5">
                 <CheckCircle2 className="h-4 w-4 text-[#2563EB]" />
-                <span className="text-slate-800 dark:text-slate-200 font-semibold">Work Order WO-2026-347 completed</span>
+                <span className="text-slate-800 font-semibold">Work Order WO-2026-347 completed</span>
               </div>
               <span className="text-slate-400 font-mono text-[11px]">15m ago</span>
             </div>
-            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 dark:border-slate-800/60">
+            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50">
               <div className="flex items-center space-x-2.5">
                 <ShoppingCart className="h-4 w-4 text-[#2563EB]" />
-                <span className="text-slate-800 dark:text-slate-200 font-semibold">Customer Order CO-2026-282 reserved</span>
+                <span className="text-slate-800 font-semibold">Customer Order CO-2026-282 reserved</span>
               </div>
               <span className="text-slate-400 font-mono text-[11px]">28m ago</span>
             </div>
             <div className="flex items-center justify-between text-xs py-1.5">
               <div className="flex items-center space-x-2.5">
                 <Boxes className="h-4 w-4 text-[#2563EB]" />
-                <span className="text-slate-800 dark:text-slate-200 font-semibold">Stock adjustment made</span>
+                <span className="text-slate-800 font-semibold">Stock adjustment made</span>
               </div>
               <span className="text-slate-400 font-mono text-[11px]">45m ago</span>
             </div>
@@ -259,29 +330,29 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Low Stock Alerts */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Low Stock Alerts</h3>
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">Low Stock Alerts</h3>
             <button onClick={() => navigate('/inventory')} className="text-xs font-bold text-[#2563EB] hover:underline">
               View all
             </button>
           </div>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 dark:border-slate-800/60">
-              <span className="font-semibold text-slate-900 dark:text-white">ERP Test Steel Pipe</span>
+            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50">
+              <span className="font-semibold text-slate-900">ERP Test Steel Pipe</span>
               <span className="font-mono font-bold text-[#2563EB]">10 left</span>
             </div>
-            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 dark:border-slate-800/60">
-              <span className="font-semibold text-slate-900 dark:text-white">Edge Test Item</span>
+            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50">
+              <span className="font-semibold text-slate-900">Edge Test Item</span>
               <span className="font-mono font-bold text-[#2563EB]">5 left</span>
             </div>
-            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 dark:border-slate-800/60">
-              <span className="font-semibold text-slate-900 dark:text-white">Test Steel Beams</span>
+            <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50">
+              <span className="font-semibold text-slate-900">Test Steel Beams</span>
               <span className="font-mono font-bold text-[#2563EB]">15 left</span>
             </div>
             <div className="flex items-center justify-between text-xs py-1.5">
-              <span className="font-semibold text-slate-900 dark:text-white">Transfer Item Alpha</span>
+              <span className="font-semibold text-slate-900">Transfer Item Alpha</span>
               <span className="font-mono font-bold text-[#2563EB]">20 left</span>
             </div>
           </div>
